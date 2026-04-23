@@ -25,7 +25,7 @@ Track implementation progress for RavenDB Test Runner MCP Server.
 | Workstream | Owner/Agent | Status | Scope | Notes |
 |---|---|---|---|---|
 | WP_B embedded bootstrap and database init | integrating-agent | Done | WP_B_001 embedded bootstrap and database initialization | Embedded bootstrap, license probe order, database initialization, and attachments-first routing baseline landed; ENV-001 remains open as non-blocking |
-| WP_C workspace and repo line detection | worker/Epicurus | In Progress | WP_C_001 workspace and repo-line detection | First bounded worker wave; write-set limited to semantics modules and WP_C_001 handoff note; IMPLEMENTATION_PROGRESS.md remains integrator-owned |
+| WP_C workspace and repo line detection | worker/Epicurus | Done | WP_C_001 workspace and repo-line detection | First bounded worker wave accepted; semantics abstractions, v6.2/v7.1/v7.2 plugins, and fixture/snapshot validation harness landed; solution integration and validation completed by integrator |
 
 ## Open Risks / Blockers
 | ID | Status | Owner/Agent | Description | Next Action |
@@ -35,7 +35,7 @@ Track implementation progress for RavenDB Test Runner MCP Server.
 ## Recent Handoffs
 | Date | Task ID | Owner/Agent | Result | Handoff Notes |
 |---|---|---|---|---|
-| None |  |  |  |  |
+| 2026-04-23 | WP_C_001_workspace_and_repo_line_detection | worker/Epicurus | Accepted | `design-doc/docs/tasks/WP_C/WP_C_001_workspace_and_repo_line_detection_HANDOFF.md` |
 
 ## Task Progress Ledger
 | Task ID | Status | Owner/Agent | Last Commit | Validation | Notes |
@@ -52,7 +52,7 @@ Track implementation progress for RavenDB Test Runner MCP Server.
 | WP_B_004_deferred_bulky_diagnostics_and_spillover_guardrails | Not Started |  |  |  |  |
 | WP_B_005_event_checkpoint_and_resume_persistence | Not Started |  |  |  |  |
 | WP_B_006_restart_recovery_cleanup_and_retention | Not Started |  |  |  |  |
-| WP_C_001_workspace_and_repo_line_detection | In Progress | worker/Epicurus |  |  | Worker implementing bounded workspace detection, repo-line routing, and capability discovery for v6.2, v7.1, and v7.2 within the semantics module tree only |
+| WP_C_001_workspace_and_repo_line_detection | Done | worker/Epicurus | `pending/uncommitted` | `dotnet build .\RavenDB.TestRunner.McpServer.sln -m:1 -v minimal` succeeded with per-command `MSBuildSDKsPath` set to .NET SDK 10.0.203 after solution integration; `dotnet run --project .\tests\RavenDB.TestRunner.McpServer.Semantics.Tests\RavenDB.TestRunner.McpServer.Semantics.Tests.csproj --no-build` succeeded with the same override and validated v6.2/v7.1/v7.2 fixture detection, capability-matrix snapshots, and conflicting-branch evidence override; `git diff --check` passed | Handoff accepted: `docs/tasks/WP_C/WP_C_001_workspace_and_repo_line_detection_HANDOFF.md`; no RavenDB docs were needed; no WP_B files or ledger edits were delegated; solution integration completed by integrator |
 | WP_C_002_semantic_plugin_contracts | Not Started |  |  |  |  |
 | WP_C_003_v62_semantics_plugin | Not Started |  |  |  |  |
 | WP_C_004_v71_semantics_plugin | Not Started |  |  |  |  |

@@ -1,0 +1,26 @@
+{
+  "repoLine": "v6.2",
+  "frameworkFamily": "xunit.v2",
+  "runnerFamily": "xunit.v2",
+  "adapterFamily": "xunit.runner.visualstudio",
+  "supportsSlowTestsIssuesProject": true,
+  "supportsAiEmbeddingsSemantics": false,
+  "supportsAiConnectionStrings": false,
+  "supportsAiAgentsSemantics": false,
+  "supportsAiTestAttributes": false,
+  "supportsXunitV3SourceInfo": false,
+  "supportsBuildGraphSpecialCases": false,
+  "capabilities": {
+    "supportsSlowTestsIssuesProject": true,
+    "supportsAiEmbeddingsSemantics": false,
+    "supportsAiConnectionStrings": false,
+    "supportsAiAgentsSemantics": false,
+    "supportsAiTestAttributes": false,
+    "supportsXunitV3SourceInfo": false,
+    "supportsBuildGraphSpecialCases": false
+  },
+  "versionSensitivePoints": [
+    "v6.2 remains on xUnit v2-era metadata surfaces.",
+    "AI-specific test semantics are treated as unsupported on the v6.2 baseline."
+  ]
+}

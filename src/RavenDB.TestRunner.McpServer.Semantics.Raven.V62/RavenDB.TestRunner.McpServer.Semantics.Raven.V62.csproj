@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>RavenDB.TestRunner.McpServer.Semantics.Raven.V62</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RavenDB.TestRunner.McpServer.Semantics.Abstractions\RavenDB.TestRunner.McpServer.Semantics.Abstractions.csproj" />
+  </ItemGroup>
+</Project>

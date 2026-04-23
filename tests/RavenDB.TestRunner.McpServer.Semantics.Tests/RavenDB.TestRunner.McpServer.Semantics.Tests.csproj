@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>RavenDB.TestRunner.McpServer.Semantics.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RavenDB.TestRunner.McpServer.Semantics.Abstractions\RavenDB.TestRunner.McpServer.Semantics.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\RavenDB.TestRunner.McpServer.Semantics.Raven.V62\RavenDB.TestRunner.McpServer.Semantics.Raven.V62.csproj" />
+    <ProjectReference Include="..\..\src\RavenDB.TestRunner.McpServer.Semantics.Raven.V71\RavenDB.TestRunner.McpServer.Semantics.Raven.V71.csproj" />
+    <ProjectReference Include="..\..\src\RavenDB.TestRunner.McpServer.Semantics.Raven.V72\RavenDB.TestRunner.McpServer.Semantics.Raven.V72.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Snapshots\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
