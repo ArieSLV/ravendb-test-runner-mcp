@@ -31,6 +31,28 @@ public sealed class RavenV62Semantics : RavenSemanticsPluginBase
             ]);
     }
 
+    public override ResultNormalizationHints GetResultNormalizationHints(WorkspaceInspection inspection)
+    {
+        return new ResultNormalizationHints(
+            RepoLine,
+            frameworkFamily: "xunit.v2",
+            runnerFamily: "xunit.v2",
+            adapterFamily: "xunit.runner.visualstudio",
+            sourceInfoMode: "xunit.v2.metadata",
+            supportsXunitV3SourceInfo: false,
+            stableIdentityFields:
+            [
+                "fullyQualifiedName",
+                "classFqn",
+                "methodName"
+            ],
+            versionSensitivePoints:
+            [
+                "v6.2 normalization uses xUnit v2-era identity fields.",
+                "xUnit v3 source-info fields are not expected on the v6.2 line."
+            ]);
+    }
+
     protected override int ScoreWorkspace(WorkspaceInspection inspection, List<string> evidence)
     {
         var score = ScoreFramework(

@@ -8,6 +8,8 @@ public abstract class RavenSemanticsPluginBase : ISemanticPlugin
 
     public abstract CapabilityMatrix GetCapabilityMatrix(WorkspaceInspection inspection);
 
+    public abstract ResultNormalizationHints GetResultNormalizationHints(WorkspaceInspection inspection);
+
     public WorkspaceLineCandidate Evaluate(WorkspaceInspection inspection)
     {
         List<string> evidence = [];

@@ -8,7 +8,7 @@ namespace RavenDB.TestRunner.McpServer.Semantics.Tests;
 
 internal static class Program
 {
-    private const int ValidationCount = 5;
+    private const int ValidationCount = 6;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -33,6 +33,7 @@ internal static class Program
         RunValidation(failures, "v6.2 fixture detection and snapshot", ValidateV62Fixture);
         RunValidation(failures, "v7.1 fixture detection and snapshot", ValidateV71Fixture);
         RunValidation(failures, "v7.2 fixture detection and snapshot", ValidateV72Fixture);
+        RunValidation(failures, "result normalization contracts match capability routing", ValidateResultNormalizationContracts);
         RunValidation(failures, "richer evidence overrides a conflicting branch line", ValidateConflictingBranchEvidence);
         RunValidation(failures, "bounded scan truncation is deterministic and ambiguity-aware", ValidateDeterministicTruncation);
 
@@ -118,6 +119,37 @@ internal static class Program
         var detection = Detector.Detect(inspection);
         EnsureEqual(RepoLines.V71, detection.RepoLine, "detection should prefer richer workspace evidence");
         EnsureEqual(RavenV71Semantics.SemanticPluginId, detection.PluginId, "conflicting branch should still route to v7.1 semantics");
+    }
+
+    private static void ValidateResultNormalizationContracts()
+    {
+        using var v62Fixture = WorkspaceFixture.CreateV62();
+        using var v71Fixture = WorkspaceFixture.CreateV71();
+        using var v72Fixture = WorkspaceFixture.CreateV72();
+
+        ValidateResultNormalizationContract(v62Fixture, RepoLines.V62, supportsXunitV3SourceInfo: false);
+        ValidateResultNormalizationContract(v71Fixture, RepoLines.V71, supportsXunitV3SourceInfo: false);
+        ValidateResultNormalizationContract(v72Fixture, RepoLines.V72, supportsXunitV3SourceInfo: true);
+    }
+
+    private static void ValidateResultNormalizationContract(
+        WorkspaceFixture fixture,
+        string repoLine,
+        bool supportsXunitV3SourceInfo)
+    {
+        var inspection = WorkspaceInspector.Scan(fixture.RootPath);
+        var plugin = Router.Route(repoLine);
+        var capabilityMatrix = plugin.GetCapabilityMatrix(inspection);
+        var hints = plugin.GetResultNormalizationHints(inspection);
+
+        EnsureEqual(capabilityMatrix.RepoLine, hints.RepoLine, $"{repoLine} normalization repo line");
+        EnsureEqual(capabilityMatrix.FrameworkFamily, hints.FrameworkFamily, $"{repoLine} normalization framework family");
+        EnsureEqual(capabilityMatrix.RunnerFamily, hints.RunnerFamily, $"{repoLine} normalization runner family");
+        EnsureEqual(capabilityMatrix.AdapterFamily, hints.AdapterFamily, $"{repoLine} normalization adapter family");
+        EnsureEqual(capabilityMatrix.SupportsXunitV3SourceInfo, hints.SupportsXunitV3SourceInfo, $"{repoLine} normalization source-info capability");
+        EnsureEqual(supportsXunitV3SourceInfo, hints.SupportsXunitV3SourceInfo, $"{repoLine} expected source-info capability");
+        Ensure(hints.StableIdentityFields.Count > 0, $"{repoLine} normalization should publish stable identity fields.");
+        Ensure(hints.VersionSensitivePoints.Count > 0, $"{repoLine} normalization should publish version-sensitive points.");
     }
 
     private static void ValidateDeterministicTruncation()

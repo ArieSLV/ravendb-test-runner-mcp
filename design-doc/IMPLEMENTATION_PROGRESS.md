@@ -25,7 +25,7 @@ Track implementation progress for RavenDB Test Runner MCP Server.
 | Workstream | Owner/Agent | Status | Scope | Notes |
 |---|---|---|---|---|
 | WP_B collections indexes and optimistic concurrency | integrating-agent | Done | WP_B_002 collections, indexes, revisions-policy decisions, and optimistic concurrency baseline | Storage schema baseline, required indexes, revision decisions, and optimistic concurrency baseline landed; WP_B_001 lifecycle control and attachments-first policy preserved |
-| WP_C semantic plugin contracts | worker/Ramanujan | In Progress | WP_C_002 semantic plugin contracts hardening and completeness pass | One bounded worker running with model gpt-5.5 and reasoning_effort xhigh; IMPLEMENTATION_PROGRESS.md remains integrator-owned |
+| WP_C semantic plugin contracts | worker/Ramanujan | Done | WP_C_002 semantic plugin contracts hardening and completeness pass | Worker model gpt-5.5 with reasoning_effort xhigh; result-normalization provider contract landed and integrator validation passed |
 
 ## Open Risks / Blockers
 | ID | Status | Owner/Agent | Description | Next Action |
@@ -36,6 +36,7 @@ Track implementation progress for RavenDB Test Runner MCP Server.
 | Date | Task ID | Owner/Agent | Result | Handoff Notes |
 |---|---|---|---|---|
 | 2026-04-23 | WP_C_001_workspace_and_repo_line_detection | worker/Epicurus | Accepted | `design-doc/docs/tasks/WP_C/WP_C_001_workspace_and_repo_line_detection_HANDOFF.md` |
+| 2026-04-23 | WP_C_002_semantic_plugin_contracts | worker/Ramanujan | Accepted | `design-doc/docs/tasks/WP_C/WP_C_002_semantic_plugin_contracts_HANDOFF.md` |
 
 ## Task Progress Ledger
 | Task ID | Status | Owner/Agent | Last Commit | Validation | Notes |
@@ -53,7 +54,7 @@ Track implementation progress for RavenDB Test Runner MCP Server.
 | WP_B_005_event_checkpoint_and_resume_persistence | Not Started |  |  |  |  |
 | WP_B_006_restart_recovery_cleanup_and_retention | Not Started |  |  |  |  |
 | WP_C_001_workspace_and_repo_line_detection | Done | integrating-agent | `9653b96` | `dotnet build .\RavenDB.TestRunner.McpServer.sln -m:1 -v minimal` succeeded with per-command `MSBuildSDKsPath` set to .NET SDK 10.0.203; `dotnet run --project .\tests\RavenDB.TestRunner.McpServer.Semantics.Tests\RavenDB.TestRunner.McpServer.Semantics.Tests.csproj --no-build` succeeded with the same override and validated 5/5 checks including deterministic truncation and truncated close-score ambiguity; `git diff --check` passed | Corrective pass accepted: bounded scan traversal order is normalized before evidence caps, and truncated scans require stronger score separation before decisive selection; handoff updated at `docs/tasks/WP_C/WP_C_001_workspace_and_repo_line_detection_HANDOFF.md` |
-| WP_C_002_semantic_plugin_contracts | In Progress | worker/Ramanujan |  |  | Worker will harden existing semantic plugin contracts without duplicating WP_C_001 abstractions; ledger remains integrator-owned |
+| WP_C_002_semantic_plugin_contracts | Done | worker/Ramanujan | `pending/uncommitted` | `dotnet build .\RavenDB.TestRunner.McpServer.sln -m:1 -v minimal` succeeded with per-command `MSBuildSDKsPath` set to .NET SDK 10.0.203; `dotnet run --project .\tests\RavenDB.TestRunner.McpServer.Semantics.Tests\RavenDB.TestRunner.McpServer.Semantics.Tests.csproj --no-build` succeeded with the same override and validated 6/6 checks including result-normalization contract alignment with capability routing; `git diff --check` passed | Handoff accepted: `docs/tasks/WP_C/WP_C_002_semantic_plugin_contracts_HANDOFF.md`; worker used model `gpt-5.5` with `reasoning_effort=xhigh`; no external docs used; no ledger, WP_B, MCP host, Web API, UI, build subsystem, or test execution subsystem files were delegated |
 | WP_C_003_v62_semantics_plugin | Not Started |  |  |  |  |
 | WP_C_004_v71_semantics_plugin | Not Started |  |  |  |  |
 | WP_C_005_v72_semantics_plugin | Not Started |  |  |  |  |

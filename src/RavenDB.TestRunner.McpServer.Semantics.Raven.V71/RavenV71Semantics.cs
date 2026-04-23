@@ -31,6 +31,28 @@ public sealed class RavenV71Semantics : RavenSemanticsPluginBase
             ]);
     }
 
+    public override ResultNormalizationHints GetResultNormalizationHints(WorkspaceInspection inspection)
+    {
+        return new ResultNormalizationHints(
+            RepoLine,
+            frameworkFamily: "xunit.v2",
+            runnerFamily: "xunit.v2",
+            adapterFamily: "xunit.runner.visualstudio",
+            sourceInfoMode: "xunit.v2.metadata",
+            supportsXunitV3SourceInfo: false,
+            stableIdentityFields:
+            [
+                "fullyQualifiedName",
+                "classFqn",
+                "methodName"
+            ],
+            versionSensitivePoints:
+            [
+                "v7.1 normalization remains compatible with xUnit v2-era result metadata.",
+                "AI-related result annotations must be treated as capability-discovered metadata."
+            ]);
+    }
+
     protected override int ScoreWorkspace(WorkspaceInspection inspection, List<string> evidence)
     {
         var score = ScoreFramework(
