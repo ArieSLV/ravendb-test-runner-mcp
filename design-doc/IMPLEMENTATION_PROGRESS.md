@@ -24,7 +24,7 @@ Track implementation progress for RavenDB Test Runner MCP Server.
 ## Active Workstreams
 | Workstream | Owner/Agent | Status | Scope | Notes |
 |---|---|---|---|---|
-| WP_A event contract baseline | integrating-agent | Done | WP_A_004 event contract baseline | Phase 0 only; WP_B/WP_C remain gated until WP_A_001-WP_A_006 are done or explicitly deferred |
+| WP_A state machine baseline | integrating-agent | Done | WP_A_005 state machine baseline | Phase 0 only; ENV-001 remains open; WP_B/WP_C remain gated until WP_A_001-WP_A_006 are done or explicitly deferred |
 
 ## Open Risks / Blockers
 | ID | Status | Owner/Agent | Description | Next Action |
@@ -43,7 +43,7 @@ Track implementation progress for RavenDB Test Runner MCP Server.
 | WP_A_002_shared_contracts_project_layout | Done | integrating-agent | `024e8c6` | `dotnet build .\RavenDB.TestRunner.McpServer.sln -v minimal` succeeded with per-command `MSBuildSDKsPath` set to .NET SDK 10.0.203; contract-document mapping review covered 13/13 contract docs; no runtime dependencies introduced | Handoff: `docs/tasks/WP_A/WP_A_002_shared_contracts_project_layout_HANDOFF.md`; ENV-001 remains open; WP_B/WP_C remain gated |
 | WP_A_003_document_id_and_collection_conventions | Done | integrating-agent | `4eff359` | `dotnet build .\RavenDB.TestRunner.McpServer.sln -v minimal` succeeded with per-command `MSBuildSDKsPath` set to .NET SDK 10.0.203; 20/20 collection names and 20/20 document ID patterns covered; no runtime dependencies introduced; `git diff --check` passed | Handoff: `docs/tasks/WP_A/WP_A_003_document_id_and_collection_conventions_HANDOFF.md`; ENV-001 remains open; WP_B/WP_C remain gated |
 | WP_A_004_event_contract_baseline | Done | integrating-agent | `0719fa1` | `dotnet build .\RavenDB.TestRunner.McpServer.sln -v minimal` succeeded with per-command `MSBuildSDKsPath` set to .NET SDK 10.0.203; event envelope 7/7 fields, 5/5 stream patterns, and 39/39 event types covered; ordering/cursor/replay semantics represented; no runtime dependencies introduced; `git diff --check` passed | Handoff: `docs/tasks/WP_A/WP_A_004_event_contract_baseline_HANDOFF.md`; ENV-001 remains open; WP_B/WP_C remain gated |
-| WP_A_005_state_machine_baseline | Not Started |  |  |  |  |
+| WP_A_005_state_machine_baseline | Done | integrating-agent | `pending/uncommitted` | `dotnet build .\RavenDB.TestRunner.McpServer.sln -v minimal` succeeded with per-command `MSBuildSDKsPath` set to .NET SDK 10.0.203; build lifecycle states 15/15, build result statuses 6/6, build readiness statuses 4/4, run lifecycle states 13/13, attempt lifecycle states 8/8, and quarantine lifecycle states 5/5 covered; build terminal mappings 5/5 represented; build vocabulary separation and optimistic concurrency expectations preserved; no runtime dependencies introduced; `git diff --check` passed | Handoff: `docs/tasks/WP_A/WP_A_005_state_machine_baseline_HANDOFF.md`; ENV-001 remains open; WP_B/WP_C remain gated; carry forward to WP_A_006 review whether `STORAGE_MODEL.md` example ID patterns should mirror all 20 implementation-facing patterns from WP_A_003 |
 | WP_A_006_phase0_validation_harness | Not Started |  |  |  |  |
 | WP_B_001_embedded_bootstrap_and_database_init | Not Started |  |  |  |  |
 | WP_B_002_collections_indexes_and_optimistic_concurrency | Not Started |  |  |  |  |
