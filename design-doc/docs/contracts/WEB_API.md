@@ -63,6 +63,127 @@ Browser-facing APIs are distinct from MCP APIs.
 - `POST /api/quarantine/actions`
 - `POST /api/settings/profiles`
 
+## Compact response-shape notes
+### `GET /api/runs`
+Response shape:
+- `items: RunListItem[]`
+- `nextCursor` (optional)
+- `totalCount` (optional)
+
+Each `RunListItem` MUST include:
+- `runId`
+- `runPlanId`
+- `state`
+- `phase`
+- `selectionSummary`
+- `linkedBuildId` (optional)
+- `linkedReadinessTokenId` (optional)
+- `buildReuseDecision` (optional)
+- `startedAtUtc` (optional)
+- `endedAtUtc` (optional)
+- `canCancel`
+
+### `GET /api/runs/{runId}`
+Response shape:
+- `view: RunDetailsView`
+
+`RunDetailsView` MUST include:
+- `runId`
+- `runPlanId`
+- `workspaceId`
+- `state`
+- `phase`
+- `status` (optional until terminal)
+- `selectionSummary`
+- `executionProfileName`
+- `linkedBuildId` (optional)
+- `linkedBuildPlanId` (optional)
+- `linkedReadinessTokenId` (optional)
+- `buildReuseDecision` (optional)
+- `progress`
+- `predictedSkips`
+- `artifactSummary`
+- `resultSummary`
+- `failureClassification` (optional)
+- `reproCommandSummary`
+
+### `GET /api/runs/{runId}/results`
+Response shape:
+- `runId`
+- `summary`
+- `failureClassification` (optional)
+- `buildLinkage`
+- `resultRows: TestResultRow[]`
+- `artifactSummary`
+
+Each `TestResultRow` MUST include:
+- `testId`
+- `displayName`
+- `fullyQualifiedName`
+- `projectName`
+- `status`
+- `normalizedOutcome`
+- `durationMs`
+- `skipExplanation` (optional)
+- `failureSignatureHash` (optional)
+- `attemptIndexes` (optional)
+
+### `GET /api/runs/{runId}/attempts`
+Response shape:
+- `runId`
+- `linkedBuildId` (optional)
+- `linkedReadinessTokenId` (optional)
+- `attempts: AttemptSummaryView[]`
+
+Each `AttemptSummaryView` MUST include:
+- `attemptIndex`
+- `status`
+- `durationMs`
+- `diagnosticEscalationLevel`
+- `linkedBuildId` (optional)
+- `linkedReadinessTokenId` (optional)
+- `failureSignatureHash` (optional)
+
+### `GET /api/runs/{runId}/artifacts`
+Response shape:
+- `runId`
+- `items: ArtifactSummaryView[]`
+
+Each `ArtifactSummaryView` MUST include:
+- `artifactId`
+- `artifactKind`
+- `storageKind`
+- `sizeBytes`
+- `previewAvailable`
+- `retentionClass`
+- `linkedBuildId` (optional)
+- `linkedReadinessTokenId` (optional)
+
+### `GET /api/runs/{runId}/plan`
+Response shape:
+- `runId`
+- `plan: RunPlanInspectorView`
+
+`RunPlanInspectorView` MUST include:
+- `runPlanId`
+- `selectionSummary`
+- `executionProfileName`
+- `buildPolicyMode`
+- `linkedBuildId` (optional)
+- `linkedBuildPlanId` (optional)
+- `linkedReadinessTokenId` (optional)
+- `buildReuseDecision` (optional)
+- `steps`
+- `predictedSkips`
+
+## Build response alignment rule
+Build endpoints MAY return build-specific view models, but build and run responses MUST refer to the same underlying entity concepts:
+- `linkedBuildId`
+- `linkedReadinessTokenId`
+- `buildReuseDecision`
+- `failureClassification`
+- `artifactSummary`
+
 ## Live transports
 ### SignalR hubs
 - `/hubs/builds`
@@ -90,3 +211,4 @@ SSE is supplementary and useful for read-only streams and cursor replay.
 - log cursor tests
 - localhost/origin validation tests
 - build and run surface consistency tests
+- UI contract tests proving build-linked run payloads are field-complete

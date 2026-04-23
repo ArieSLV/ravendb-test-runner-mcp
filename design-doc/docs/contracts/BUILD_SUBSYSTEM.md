@@ -44,7 +44,6 @@ The build subsystem owns:
 - configuration, target frameworks, runtime identifiers if applicable
 - relevant MSBuild properties
 - relevant environment inputs
-- artifact root configuration
 
 ## Outputs
 - `BuildPlan`
@@ -109,6 +108,34 @@ A readiness token MUST be invalidated when:
 - a newer incompatible build supersedes it,
 - policy or fingerprint changes reject it,
 - cleanup/removal affects required outputs.
+
+## Lifecycle vocabulary rule
+The build subsystem uses three distinct but coordinated concepts:
+- `BuildExecution.state` for lifecycle progression,
+- `BuildResult.status` for final execution outcome,
+- `BuildReadinessToken.status` for future output reusability.
+
+The subsystem narrative, MCP tools, browser APIs, and UI MUST use these terms consistently.
+
+### Canonical interpretation
+- execution ends in lifecycle completion,
+- result records `succeeded`, `failed`, `cancelled`, `timed_out`, `reused`, or `invalid`,
+- readiness records whether the outputs remain reusable later.
+
+## Artifact policy
+### v1 authoritative rule
+Build artifacts that are in scope for v1 MUST default to RavenDB attachments through `ArtifactRef` ownership.
+
+### In-scope v1 build artifacts
+- command payloads
+- summaries
+- output manifests
+- stdout/stderr/merged logs
+- `binlog` when the selected build profile enables it
+- compact diagnostics in scope for v1
+
+### Deferred bulky diagnostics
+Bulky build diagnostics outside the practical v1 attachment policy are not part of the mandatory v1 storage path. They MUST be treated as deferred / out-of-scope unless a later ADR adds a separate spillover model.
 
 ## Status and transport surfaces
 Build is first-class at every surface layer.
@@ -194,3 +221,4 @@ The build subsystem MUST emit structured telemetry for:
 - build artifact and binlog tests
 - build status/API/event parity tests
 - restart recovery tests for active builds
+- lifecycle vocabulary mapping tests (`BuildExecution.state` vs `BuildResult.status` vs `BuildReadinessToken.status`)

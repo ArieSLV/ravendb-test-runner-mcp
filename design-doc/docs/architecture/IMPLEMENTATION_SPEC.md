@@ -117,8 +117,10 @@ The stdio bridge is a compatibility facade. It MUST NOT become the state-owning 
 ### 4.4 Storage strategy
 - RavenDB Embedded is mandatory for metadata/state/history
 - SQLite is forbidden
-- Large raw artifacts use the filesystem as canonical storage
-- RavenDB stores metadata, references, compact attachments, and indexes
+- RavenDB Embedded is authoritative for metadata, references, indexes, and v1 artifact persistence via attachments
+- Build/test artifacts in scope for v1 default to RavenDB attachments
+- Filesystem ownership is not the normative v1 artifact path
+- Bulky diagnostics outside the practical v1 attachment policy are deferred until a later ADR or milestone explicitly introduces them
 
 ### 4.5 Supported repository lines
 The product MUST support these first-class repository lines:
@@ -212,8 +214,8 @@ The product consists of the following top-level subsystems.
 
 ### 6.4 Persistence and artifacts
 - RavenDB Embedded metadata database
-- filesystem artifact root
-- compact attachment policy for RavenDB
+- attachment-backed v1 artifact persistence
+- deferred extension point for future bulky diagnostic spillover
 - retention / cleanup subsystem
 
 ### 6.5 Flaky / quarantine subsystem
@@ -393,17 +395,11 @@ RavenDB Embedded MUST store:
 - settings and policies,
 - event checkpoints.
 
-### 11.2 Filesystem stores
-The filesystem artifact root MUST store:
-- large transcripts,
-- large `trx`/`junit` files,
-- large `binlog` files if above threshold,
-- dumps/blame artifacts,
-- bulky diagnostics,
-- large export bundles.
+### 11.2 Attachment-backed v1 artifacts
+The v1 storage baseline MUST store in-scope build and test artifacts as RavenDB attachments. This includes the usual build/test outputs such as stdout/stderr/merged logs, `trx`, `junit`, `binlog` when enabled, summaries, manifests, and normalized results.
 
-### 11.3 Compact attachments
-RavenDB attachments MAY be used for compact build/test artifacts under the configured threshold.
+### 11.3 Deferred bulky diagnostics extension
+Oversized diagnostic payloads such as dumps, bulky blame bundles, or pathological transcripts are not mandatory v1 artifact classes. They MAY be introduced later only through an explicit ADR that defines ownership, retention, and browser/MCP retrieval behavior.
 
 ---
 

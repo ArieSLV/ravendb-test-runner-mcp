@@ -1,20 +1,23 @@
-# WP B 004 filesystem artifact layout and hashing
+# WP B 004 deferred bulky diagnostics and spillover guardrails
 
 ## Task ID
-`WP_B_004_filesystem_artifact_layout_and_hashing`
+`WP_B_004_deferred_bulky_diagnostics_and_spillover_guardrails`
 
 ## Title
-Implement canonical filesystem layout, hashing, and path registration for large artifacts.
+Define the deferred bulky-diagnostics extension point and explicit out-of-v1-scope spillover guardrails.
 
 ## Purpose
 Deliver one bounded step of RavenDB Test Runner MCP Server without changing frozen architecture implicitly.
 
 ## Scope
-- implement the task-specific capability described by the title
+- define how v1 handles artifacts that exceed the practical attachment guardrail
+- ensure such artifacts are classified as deferred / out-of-scope rather than silently becoming default filesystem-owned artifacts
+- document future extension hooks without implementing a mandatory hybrid v1 storage path
 - update only the contracts/docs/modules required by this task
 - preserve the naming and build-subsystem invariants
 
 ## Out of scope
+- implementing a general-purpose filesystem artifact store as a required v1 subsystem
 - unrelated refactors
 - opportunistic architecture changes without ADR
 - undocumented contract drift
@@ -34,18 +37,20 @@ Deliver one bounded step of RavenDB Test Runner MCP Server without changing froz
 - docs/contracts/SECURITY_AND_REDACTION.md
 
 ## Expected outputs
-- Implement canonical filesystem layout, hashing, and path registration for large artifacts.
+- Define the deferred bulky-diagnostics extension point and explicit out-of-v1-scope spillover guardrails.
 - updated handoff note
 - updated task status in TASK_INDEX.md if completed
 
 ## Implementation notes
 - Stay within the declared scope.
+- This task is about v1 policy clarity and explicit deferred handling, not about making filesystem ownership the default artifact path.
 - Escalate design changes through ADR / design delta if required.
 
 ## Validation steps
 - embedded startup integration test
 - document persistence test
-- artifact metadata routing test
+- attachment-backed artifact routing test
+- explicit deferred-classification test for oversized artifacts
 
 ## Definition of done
 - the task output exists in the declared module(s)

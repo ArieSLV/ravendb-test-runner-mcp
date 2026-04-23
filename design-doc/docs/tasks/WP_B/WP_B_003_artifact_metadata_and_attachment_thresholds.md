@@ -4,7 +4,7 @@
 `WP_B_003_artifact_metadata_and_attachment_thresholds`
 
 ## Title
-Implement artifact metadata documents and attachment threshold policy for compact artifacts.
+Implement artifact metadata documents and attachment-backed persistence for in-scope v1 artifacts.
 
 ## Purpose
 Deliver one bounded step of RavenDB Test Runner MCP Server without changing frozen architecture implicitly.
@@ -34,7 +34,7 @@ Deliver one bounded step of RavenDB Test Runner MCP Server without changing froz
 - docs/contracts/SECURITY_AND_REDACTION.md
 
 ## Expected outputs
-- Implement artifact metadata documents and attachment threshold policy for compact artifacts.
+- Implement artifact metadata documents and attachment-backed persistence for in-scope v1 artifacts.
 - updated handoff note
 - updated task status in TASK_INDEX.md if completed
 

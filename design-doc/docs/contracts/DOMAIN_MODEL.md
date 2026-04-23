@@ -1,11 +1,10 @@
 # DOMAIN_MODEL.md
 
 ## Purpose
-Define the stable domain entities for builds, tests, runs, attempts, artifacts, and compatibility state.
+Define the stable domain entities for builds, tests, runs, attempts, artifacts, capabilities, and shared transport envelopes.
 
 ## Scope
 This file is normative for the bounded area described below. If implementation notes elsewhere conflict with this file, this file wins unless an ADR explicitly supersedes it.
-
 
 ## Scope boundaries
 This model covers:
@@ -17,7 +16,7 @@ This model covers:
 - shared envelopes used by MCP and browser-facing surfaces.
 
 ## Naming invariant
-All examples and type names are expressed for RavenDB Test Runner MCP Server. Internal implementation namespaces SHOULD follow `RavenDB.TestRunner.McpServer`.
+All examples and type names are expressed for **RavenDB Test Runner MCP Server**. Internal implementation namespaces SHOULD follow `RavenDB.TestRunner.McpServer`.
 
 ## Workspace entities
 ### WorkspaceSnapshot
@@ -73,8 +72,8 @@ Fields:
 - `mode` (`require_existing_ready_build`, `build_if_missing_or_stale`, `force_incremental_build`, `force_rebuild`, `expert_skip_build`)
 - `allowImplicitRestore`
 - `captureBinlog`
-- `captureCompactArtifactsAsAttachments`
-- `thresholdBytes`
+- `captureArtifactsAsAttachments`
+- `practicalAttachmentGuardrailBytes`
 - `cleanBeforeBuild`
 - `reuseExistingReadiness`
 
@@ -94,6 +93,9 @@ Fields:
 - `outputManifestHash`
 
 ### BuildReadinessToken
+Semantic definition:
+- `BuildReadinessToken.status` expresses whether outputs remain reusable for future work. It is not the same thing as execution progress and not the same thing as final build result.
+
 Fields:
 - `readinessTokenId`
 - `buildId`
@@ -124,15 +126,17 @@ Fields:
 - `reuseDecision`
 - `steps`
 - `expectedArtifacts`
-- `resultsDirectory`
 - `createdAtUtc`
 
 ### BuildExecution
+Semantic definition:
+- `BuildExecution.state` expresses lifecycle progression only. It answers the question “where is the build in its execution flow?”.
+
 Fields:
 - `buildId`
 - `buildPlanId`
 - `workspaceId`
-- `state`
+- `state` (`created`, `queued`, `analyzing_graph`, `resolving_reuse`, `restoring`, `building`, `harvesting`, `finalizing_readiness`, `finalizing_reuse`, `completed`, `cancelling`, `cancelled`, `timeout_kill_pending`, `timed_out`, `failed_terminal`)
 - `phase`
 - `currentStepIndex`
 - `startedAtUtc`
@@ -142,6 +146,9 @@ Fields:
 - `canCancel`
 
 ### BuildResult
+Semantic definition:
+- `BuildResult.status` expresses the final execution outcome. It answers the question “what outcome did the completed build record produce?”.
+
 Fields:
 - `buildId`
 - `status` (`succeeded`, `failed`, `cancelled`, `timed_out`, `reused`, `invalid`)
@@ -158,6 +165,15 @@ Fields:
 - `reasonCodes`
 - `existingBuildId`
 - `newBuildRequired`
+
+### Build lifecycle mapping examples
+| Execution state path | Result status | Readiness status |
+|---|---|---|
+| `... -> finalizing_readiness -> completed` | `succeeded` | `ready` |
+| `... -> finalizing_reuse -> completed` | `reused` | `ready` |
+| `... -> failed_terminal` | `failed` | absent or unchanged |
+| `... -> cancelled` | `cancelled` | absent or unchanged |
+| `... -> timed_out` | `timed_out` | absent or unchanged |
 
 ## Test catalog entities
 ### TestProject
@@ -207,6 +223,25 @@ Fields:
 - `sourceFilePath` (optional)
 - `sourceLineNumber` (optional)
 
+## Shared build linkage entities
+### BuildLinkage
+Fields:
+- `linkedBuildId` (optional)
+- `linkedBuildPlanId` (optional)
+- `linkedReadinessTokenId` (optional)
+- `buildReuseDecision` (optional)
+- `buildPolicyMode`
+
+### SelectionSummary
+Fields:
+- `projectCount`
+- `assemblyCount`
+- `exactMethodCount`
+- `classSelectorCount`
+- `categoryCount`
+- `rawFilterUsed`
+- `description`
+
 ## Run entities
 ### RunRequest
 Fields:
@@ -223,10 +258,9 @@ Fields:
 - `runPlanId`
 - `workspaceId`
 - `selector`
+- `selectionSummary`
 - `executionProfile`
-- `buildDecision`
-- `linkedBuildId` (optional)
-- `linkedReadinessTokenId` (optional)
+- `buildLinkage`
 - `steps`
 - `predictedSkips`
 
@@ -240,8 +274,7 @@ Fields:
 - `currentStepIndex`
 - `startedAtUtc`
 - `endedAtUtc`
-- `linkedBuildId`
-- `linkedReadinessTokenId`
+- `buildLinkage`
 
 ### RunResult
 Fields:
@@ -250,8 +283,7 @@ Fields:
 - `summary`
 - `failureClassification`
 - `artifacts`
-- `buildDecision`
-- `buildReuseDecision`
+- `buildLinkage`
 - `normalizedTests`
 
 ## Iterative/flaky entities
@@ -315,16 +347,101 @@ Fields:
 - `state` (`proposed`, `approved`, `applied`, `reverted`, `rejected`)
 - `auditRefs`
 
-## Shared envelopes
+## Shared transport and contract envelopes
+### ToolRequestContext
+Fields:
+- `requestId` (optional)
+- `clientRequestId` (optional)
+- `expertMode` (optional)
+- `requestedBy` (optional)
+
+### ToolResponseEnvelope
+Fields:
+- `ok`
+- `requestId` (optional)
+- `warnings`
+- `versionSensitiveNotes`
+- `result`
+
+### OperationHandle
+Fields:
+- `operationKind` (`build`, `run`, `iterative_run`)
+- `operationId`
+- `statusTool`
+- `outputTool`
+- `resultTool`
+- `cancelTool`
+- `progressToken`
+- `canCancel`
+
+### ProgressSnapshot
+Fields:
+- `current`
+- `total`
+- `unit`
+- `message`
+
+### BuildStatusSnapshot
+Fields:
+- `buildId`
+- `buildPlanId`
+- `state`
+- `phase`
+- `progress`
+- `buildLinkage`
+- `resultStatus` (optional)
+- `failureClassification` (optional)
+- `canCancel`
+
+### RunStatusSnapshot
+Fields:
+- `runId`
+- `runPlanId`
+- `state`
+- `phase`
+- `progress`
+- `buildLinkage`
+- `resultStatus` (optional)
+- `failureClassification` (optional)
+- `canCancel`
+
+### OutputTailRequest
+Fields:
+- `ownerKind` (`build`, `run`)
+- `ownerId`
+- `stream` (`stdout`, `stderr`, `merged`)
+- `afterCursor` (optional)
+- `maxLines`
+
+### OutputTailPage
+Fields:
+- `ownerKind`
+- `ownerId`
+- `stream`
+- `cursor`
+- `lines`
+- `truncated`
+
+### ReproCommandSet
+Fields:
+- `ownerKind`
+- `ownerId`
+- `shell`
+- `workingDirectory`
+- `commands`
+- `redactedEnvironmentDiff`
+
 ### ArtifactRef
 Fields:
 - `artifactId`
 - `kind`
-- `storageKind` (`filesystem`, `raven_attachment`)
-- `pathOrAttachmentKey`
+- `storageKind` (`raven_attachment`, `deferred_external`)
+- `locator`
+- `attachmentName` (optional)
 - `sizeBytes`
 - `sha256`
 - `sensitive`
+- `previewAvailable`
 
 ### FailureClassification
 Fields:
@@ -340,8 +457,10 @@ Fields:
 3. Build reuse MUST always produce an explicit `BuildReuseDecision`.
 4. Raw filters MUST NOT be canonical internal identity.
 5. Deterministic skips MUST NOT be classified as flaky.
+6. All MCP and browser payloads for core build/run operations MUST map to named domain objects or stable envelopes defined here.
 
 ## Validation requirements
 - Domain contract tests MUST serialize/deserialize all major entities.
 - Identity rules MUST be stable across process restarts.
 - Build-to-run references MUST remain valid after restart and reconnect.
+- Mapping between `BuildExecution.state`, `BuildResult.status`, and `BuildReadinessToken.status` MUST be test-covered.

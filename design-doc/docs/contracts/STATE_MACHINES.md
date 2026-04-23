@@ -6,6 +6,13 @@ Define lifecycle state machines for builds, runs, attempts, and quarantine actio
 ## Scope
 This file is normative for the bounded area described below. If implementation notes elsewhere conflict with this file, this file wins unless an ADR explicitly supersedes it.
 
+## Vocabulary rule
+This file distinguishes three related but different concepts for builds:
+- `BuildExecution.state` expresses lifecycle progression
+- `BuildResult.status` expresses the final execution outcome
+- `BuildReadinessToken.status` expresses whether outputs remain reusable for future work
+
+Readers MUST NOT collapse these into a single state vocabulary.
 
 ## Build lifecycle
 ```text
@@ -16,7 +23,7 @@ created
   -> restoring (optional)
   -> building
   -> harvesting
-  -> ready
+  -> finalizing_readiness
   -> completed
 
 active
@@ -27,7 +34,7 @@ active
   -> timeout_kill_pending
   -> timed_out
 
-analyzing_graph/restoring/building/harvesting
+analyzing_graph/restoring/building/harvesting/finalizing_readiness
   -> failed_terminal
 ```
 
@@ -37,9 +44,26 @@ created
   -> queued
   -> analyzing_graph
   -> resolving_reuse
-  -> reused_existing_ready_build
+  -> finalizing_reuse
   -> completed
 ```
+
+## Build lifecycle-to-result mapping
+| `BuildExecution.state` terminal path | `BuildResult.status` | `BuildReadinessToken.status` |
+|---|---|---|
+| `completed` after `finalizing_readiness` | `succeeded` | `ready` |
+| `completed` after `finalizing_reuse` | `reused` | `ready` |
+| `failed_terminal` | `failed` | unchanged or absent |
+| `cancelled` | `cancelled` | unchanged or absent |
+| `timed_out` | `timed_out` | unchanged or absent |
+
+### Normative example
+A build can end with:
+- `BuildExecution.state = completed`
+- `BuildResult.status = reused`
+- `BuildReadinessToken.status = ready`
+
+This means the lifecycle completed successfully **without** executing a new material build, while still yielding reusable outputs.
 
 ## Run lifecycle
 ```text
@@ -91,5 +115,6 @@ proposed
 
 ## Invariants
 - A run MUST reference either a build readiness token, a linked build execution, or an explicit expert-mode skip-build decision.
-- A reused build still emits a distinct build execution/result record with `status=reused` or equivalent reuse decision metadata.
+- A reused build still emits a distinct `BuildExecution` and `BuildResult` record, but `BuildResult.status=reused` is separate from lifecycle completion.
+- Readiness invalidation is separate from build execution failure.
 - Quarantine actions MUST remain auditable and reversible.

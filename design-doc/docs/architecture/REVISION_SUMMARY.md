@@ -31,3 +31,11 @@ Summarize the integrated changes introduced in this execution-pack revision.
 
 ## Integration note
 This revision was produced as a whole-pack integration update rather than a local patch so that architecture docs, contracts, phase briefs, work packages, ADRs, and task cards stay aligned.
+
+
+## Minimal post-review fix set
+This pack includes a targeted post-review fix set that closes four findings without another structural reorganization:
+- v1 artifact storage is now attachments-first
+- MCP core planning/execution tools now include compact schema-level request/response freezes
+- build lifecycle vocabulary is now explicitly normalized across execution, result, and readiness concepts
+- browser run/test contracts are now frozen with concrete view-model and API payload fields

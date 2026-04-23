@@ -1,7 +1,7 @@
 # WP_B — STORAGE AND REGISTRY
 
 ## Objective
-Implement RavenDB Embedded registry, collections, indexes, attachments policy, and filesystem artifact metadata integration.
+Implement RavenDB Embedded registry, collections, indexes, attachment-backed artifact persistence, and deferred bulky-diagnostics extension points.
 
 ## Engineering purpose
 This work package exists to deliver a bounded part of RavenDB Test Runner MCP Server without blurring responsibilities with adjacent work packages.
@@ -11,8 +11,8 @@ This work package exists to deliver a bounded part of RavenDB Test Runner MCP Se
 ## Exact scope
 - Bootstrap RavenDB Embedded, database initialization, and mandatory licensed startup checks.
 - Implement collection creation, indexes, revisions policy decisions, and optimistic concurrency baseline.
-- Implement artifact metadata documents and attachment threshold policy for compact artifacts.
-- Implement canonical filesystem layout, hashing, and path registration for large artifacts.
+- Implement artifact metadata documents and attachment-backed persistence for in-scope v1 artifacts.
+- Define the deferred bulky-diagnostics extension point and explicit out-of-v1-scope handling.
 - Persist event checkpoints and stream resume cursors for build and run streams.
 - Implement restart recovery, retention metadata, and cleanup job journal design.
 
@@ -36,8 +36,8 @@ This work package exists to deliver a bounded part of RavenDB Test Runner MCP Se
 ## Detailed TODO checkpoints
 - [1] 001 embedded bootstrap and database init
 - [2] 002 collections indexes and optimistic concurrency
-- [3] 003 artifact metadata and attachment thresholds
-- [4] 004 filesystem artifact layout and hashing
+- [3] 003 artifact metadata and attachment-backed v1 persistence
+- [4] 004 deferred bulky-diagnostics extension point and spillover guardrails
 - [5] 005 event checkpoint and resume persistence
 - [6] 006 restart recovery cleanup and retention
 

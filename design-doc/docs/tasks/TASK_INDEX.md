@@ -19,8 +19,8 @@ This index lists the starter task backlog for RavenDB Test Runner MCP Server.
 ## WP_B
 - `WP_B_001_embedded_bootstrap_and_database_init` — Bootstrap RavenDB Embedded, database initialization, and mandatory licensed startup checks.
 - `WP_B_002_collections_indexes_and_optimistic_concurrency` — Implement collection creation, indexes, revisions policy decisions, and optimistic concurrency baseline.
-- `WP_B_003_artifact_metadata_and_attachment_thresholds` — Implement artifact metadata documents and attachment threshold policy for compact artifacts.
-- `WP_B_004_filesystem_artifact_layout_and_hashing` — Implement canonical filesystem layout, hashing, and path registration for large artifacts.
+- `WP_B_003_artifact_metadata_and_attachment_thresholds` — Implement artifact metadata documents and attachment-backed persistence for in-scope v1 artifacts.
+- `WP_B_004_deferred_bulky_diagnostics_and_spillover_guardrails` — Define the deferred bulky-diagnostics extension point and explicit out-of-v1-scope spillover guardrails.
 - `WP_B_005_event_checkpoint_and_resume_persistence` — Persist event checkpoints and stream resume cursors for build and run streams.
 - `WP_B_006_restart_recovery_cleanup_and_retention` — Implement restart recovery, retention metadata, and cleanup job journal design.
 

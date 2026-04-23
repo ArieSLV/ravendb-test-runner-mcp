@@ -6,7 +6,7 @@
 3. Whether any future RavenDB lines require build capability plugins in addition to semantic plugins.
 
 ## Operational questions
-1. Exact attachment-size threshold for RavenDB vs filesystem artifacts.
+1. Exact practical v1 attachment guardrail and the milestone/ADR criteria for introducing deferred bulky diagnostics later.
 2. Whether build binlogs should always be captured or only under specific profiles.
 3. Whether the stdio bridge should be packaged as a separate executable or an alternate startup mode.
 4. Exact first-run UX for embedded license provisioning.

@@ -1,14 +1,14 @@
 # DECISION_FREEZE.md
 
 ## Purpose
-This document freezes non-negotiable implementation decisions for RavenDB Test Runner MCP Server. It is shorter than `IMPLEMENTATION_SPEC.md` and is intended for rapid reference by coding agents.
+This document freezes non-negotiable implementation decisions for **RavenDB Test Runner MCP Server**. It is shorter than `IMPLEMENTATION_SPEC.md` and is intended for rapid reference by coding agents.
 
 ## 1. Product naming
 - Canonical product name: **RavenDB Test Runner MCP Server**
 - Canonical short label: **RTRMS**
 - Canonical internal root namespace / module root: **RavenDB.TestRunner.McpServer**
 - Retired legacy names: `RavenMcp`, `RavenMcpControlPlane`, `RavenDB Test MCP Control Plane`, `RavenMcp Execution Pack`
-- Legacy names MAY appear only in migration notes
+- Legacy names MAY appear only in migration notes and historical review artifacts
 
 ## 2. Product shape
 - Stand-alone local application
@@ -22,13 +22,17 @@ This document freezes non-negotiable implementation decisions for RavenDB Test R
 - Primary MCP surface: local Streamable HTTP
 - Secondary compatibility surface: stdio bridge
 - stdio bridge is not the system-of-record host
+- MCP and browser UI are separate surfaces over the same orchestration core
 
 ## 4. Storage
 - RavenDB Embedded is mandatory
 - SQLite is forbidden
-- Hybrid artifact storage is mandatory
-- Large raw artifacts default to filesystem
-- Compact artifacts MAY use RavenDB attachments under threshold policy
+- **v1 artifact storage is attachments-first**
+- RavenDB Embedded is the authoritative metadata store **and** the authoritative v1 artifact store for build/test artifacts that are in scope for v1
+- Build and test artifacts in scope for v1 MUST default to RavenDB attachments
+- Filesystem artifact ownership is **not** the default v1 strategy
+- Bulky binary diagnostics outside the practical v1 attachment policy (for example dumps, bulky blame bundles, and oversized diagnostic exports) are deferred to later milestones unless a later ADR explicitly introduces them
+- The design MAY reserve a future extension point for filesystem-backed bulky diagnostics, but that future extension point is non-normative for v1
 
 ## 5. Embedded licensing
 License probe order:
@@ -58,6 +62,7 @@ Future lines MUST be added via the version plugin / capability model.
 - Test execution MUST NOT hide build decisions
 - Repeated meaningless rebuilds are an architectural failure
 - Build policy MUST be server-owned, deterministic, persisted, and explainable
+- Build and test workflows MUST link through explicit build readiness contracts, not ad hoc implicit rebuild behavior
 
 ## 9. Browser UI
 - Visual baseline: RavenDB Studio 7.2
