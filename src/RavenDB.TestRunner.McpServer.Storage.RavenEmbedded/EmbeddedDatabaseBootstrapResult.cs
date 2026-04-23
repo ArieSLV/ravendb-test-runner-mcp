@@ -8,5 +8,6 @@ public sealed record EmbeddedDatabaseBootstrapResult(
     string DatabaseName,
     string DataDirectory,
     EmbeddedServerLifecycleState LifecycleState,
+    StorageSchemaBaselineSummary SchemaBaseline,
     IReadOnlyList<string> MandatoryCollections,
     string AuthoritativeArtifactStorageKind);

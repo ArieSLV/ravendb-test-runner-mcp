@@ -1,4 +1,5 @@
 using Raven.Client.ServerWide;
+using Raven.Client.Documents.Conventions;
 using Raven.Embedded;
 using RavenDB.TestRunner.McpServer.Artifacts;
 using RavenDB.TestRunner.McpServer.Shared.Contracts.DocumentConventions;
@@ -34,8 +35,13 @@ public static class EmbeddedDatabaseBootstrapper
         {
             DatabaseName = options.DatabaseName
         });
+        databaseOptions.Conventions = new DocumentConventions();
+        databaseOptions.Conventions.UseOptimisticConcurrency = true;
 
         var store = await EmbeddedServer.Instance.GetDocumentStoreAsync(databaseOptions).ConfigureAwait(false);
+        var schemaBaseline = await RavenStorageSchemaInitializer
+            .ApplyAsync(store, cancellationToken)
+            .ConfigureAwait(false);
 
         return new(
             store,
@@ -43,6 +49,7 @@ public static class EmbeddedDatabaseBootstrapper
             options.DatabaseName,
             options.DataDirectory,
             lifecycleState,
+            schemaBaseline,
             DocumentCollectionNames.All,
             ArtifactStorageKinds.RavenAttachment);
     }
