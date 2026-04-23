@@ -24,12 +24,12 @@ Track implementation progress for RavenDB Test Runner MCP Server.
 ## Active Workstreams
 | Workstream | Owner/Agent | Status | Scope | Notes |
 |---|---|---|---|---|
-| None |  | Not Started |  |  |
+| WP_A foundation scaffold | integrating-agent | Done | WP_A_001 solution scaffold and name freeze | Narrow scaffold complete; WP_B/WP_C remain gated until full Phase 0 completion |
 
 ## Open Risks / Blockers
 | ID | Status | Owner/Agent | Description | Next Action |
 |---|---|---|---|---|
-| None |  |  |  |  |
+| ENV-001 | Open | integrating-agent | Current shell has `MSBuildSDKsPath` pinned to .NET SDK 8.0.403, causing plain `dotnet build` of the `net10.0` scaffold to fail even though SDK 10.0.203 is installed. Do not mutate the global/user environment while other active work may depend on it. | Use per-command SDK environment override for current validation; address deterministic build environment sanitization in Phase 0 validation/build subsystem planning. |
 
 ## Recent Handoffs
 | Date | Task ID | Owner/Agent | Result | Handoff Notes |
@@ -39,7 +39,7 @@ Track implementation progress for RavenDB Test Runner MCP Server.
 ## Task Progress Ledger
 | Task ID | Status | Owner/Agent | Last Commit | Validation | Notes |
 |---|---|---|---|---|---|
-| WP_A_001_solution_scaffold_and_name_freeze | Not Started |  |  |  |  |
+| WP_A_001_solution_scaffold_and_name_freeze | Done | integrating-agent | N/A (uncommitted) | `dotnet build .\RavenDB.TestRunner.McpServer.sln -v minimal` succeeded with `MSBuildSDKsPath` set to .NET SDK 10.0.203; naming review, cross-link validation, and WP_A_001-scoped contract completeness review passed | Handoff: `docs/tasks/WP_A/WP_A_001_solution_scaffold_and_name_freeze_HANDOFF.md`; no WP_A_002 contract mapping |
 | WP_A_002_shared_contracts_project_layout | Not Started |  |  |  |  |
 | WP_A_003_document_id_and_collection_conventions | Not Started |  |  |  |  |
 | WP_A_004_event_contract_baseline | Not Started |  |  |  |  |

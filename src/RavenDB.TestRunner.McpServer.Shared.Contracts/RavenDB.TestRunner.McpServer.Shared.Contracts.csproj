@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>RavenDB.TestRunner.McpServer.Shared.Contracts</RootNamespace>
+  </PropertyGroup>
+</Project>
