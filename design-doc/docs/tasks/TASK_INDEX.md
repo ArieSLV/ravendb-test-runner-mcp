@@ -6,7 +6,8 @@ This index lists the starter task backlog for RavenDB Test Runner MCP Server.
 ## Usage rules
 - pick tasks through the relevant work package
 - do not start tasks that violate phase prerequisites
-- update task status in implementation tracking outside this static pack or via agreed integrator process
+- treat this file as the static backlog, not the mutable status tracker
+- update task status in `../../IMPLEMENTATION_PROGRESS.md`
 
 ## WP_A
 - `WP_A_001_solution_scaffold_and_name_freeze` — Create the solution scaffold and rename the implementation surface to the canonical product/module names.

@@ -10,6 +10,8 @@
 
 ## Validation performed
 
+## Progress ledger update
+
 ## Risks / follow-ups
 
 ## ADR or design delta notes
