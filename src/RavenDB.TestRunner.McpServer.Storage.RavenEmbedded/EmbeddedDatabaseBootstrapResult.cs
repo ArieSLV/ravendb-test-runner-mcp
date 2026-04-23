@@ -7,5 +7,6 @@ public sealed record EmbeddedDatabaseBootstrapResult(
     ResolvedEmbeddedLicense License,
     string DatabaseName,
     string DataDirectory,
+    EmbeddedServerLifecycleState LifecycleState,
     IReadOnlyList<string> MandatoryCollections,
     string AuthoritativeArtifactStorageKind);

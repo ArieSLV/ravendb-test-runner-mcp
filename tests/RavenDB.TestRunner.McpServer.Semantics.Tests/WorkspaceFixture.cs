@@ -130,6 +130,25 @@ internal sealed class WorkspaceFixture : IDisposable
         return fixture;
     }
 
+    public static WorkspaceFixture CreateDeterministicTruncation(bool reverseCreationOrder)
+    {
+        var fixture = Create(reverseCreationOrder ? "truncation-reverse" : "truncation-forward");
+        string[] paths =
+        [
+            "zeta/ZLast.cs",
+            "root-c.cs",
+            "beta/BetaMiddle.cs",
+            "Directory.Packages.props",
+            "root-a.cs",
+            "alpha/AlphaFirst.cs"
+        ];
+
+        foreach (var path in reverseCreationOrder ? paths.Reverse() : paths)
+            fixture.WriteFile(path, CreateContents(path));
+
+        return fixture;
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(RootPath))
@@ -159,5 +178,21 @@ internal sealed class WorkspaceFixture : IDisposable
             Directory.CreateDirectory(directoryPath);
 
         File.WriteAllText(fullPath, contents.Replace("\n", Environment.NewLine, StringComparison.Ordinal));
+    }
+
+    private static string CreateContents(string relativePath)
+    {
+        if (relativePath.EndsWith(".props", StringComparison.OrdinalIgnoreCase))
+        {
+            return """
+            <Project>
+              <ItemGroup>
+                <PackageVersion Include="xunit" Version="2.5.0" />
+              </ItemGroup>
+            </Project>
+            """;
+        }
+
+        return "namespace DeterministicTruncation; public sealed class Marker;";
     }
 }

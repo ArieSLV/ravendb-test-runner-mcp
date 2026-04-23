@@ -7,6 +7,8 @@
 - Added a new `RavenDB.TestRunner.McpServer.Semantics.Abstractions` project with bounded workspace scanning, repo-line normalization, line detection, branch routing, and capability-matrix projection contracts.
 - Added bounded Raven line plugins for `v6.2`, `v7.1`, and `v7.2` that score branch/package/path evidence and project capability matrices without relying on branch name alone.
 - Added a dedicated self-contained semantics validation harness with three workspace fixtures and capability-matrix snapshot checks.
+- Corrected bounded scanning to normalize directory and file traversal order before evidence caps are applied.
+- Corrected capped/close-score behavior so truncated scans require stronger score separation before being treated as decisive.
 
 ## Scope and assumptions
 - Detection is intentionally bounded to:
@@ -59,14 +61,15 @@
   - `v7.2` workspace fixture detection
   - capability-matrix snapshot checks for all three fixtures
   - one conflicting-branch fixture proving richer evidence can override a mismatched branch line
+  - deterministic capped scan behavior across different file creation orders
+  - ambiguity marking when a truncated scan leaves top repo-line candidates too close
 - Environment note:
   - local validation only succeeded after pinning `MSBuildSDKsPath` to `C:\Program Files\dotnet\sdk\10.0.203\Sdks` because the machine defaulted to .NET SDK `8.0.403`
 
 ## Risks and follow-ups
 - The detector is intentionally heuristic and path/package based. It does not parse RavenDB-specific source symbols yet.
-- New semantics projects were not added to `RavenDB.TestRunner.McpServer.sln` to avoid solution-global edits in this bounded task and because the worktree already had unrelated solution changes.
+- The semantics projects are now included in `RavenDB.TestRunner.McpServer.sln`.
 - Integrator follow-up:
-  - add the new semantics/test projects to the solution once solution-level ownership is clear,
   - wire plugin construction into the future composition root when the owning WP lands.
 
 ## Contract/doc impact
@@ -84,10 +87,12 @@
 - `Done`
 
 ## Suggested progress-ledger update
-- `WP_C_001 Done - added bounded workspace detection, branch line routing, v6.2/v7.1/v7.2 capability discovery, and fixture/snapshot validation harness; solution integration deferred to integrator.`
+- `WP_C_001 Done - added bounded deterministic workspace detection, branch line routing, v6.2/v7.1/v7.2 capability discovery, and fixture/snapshot validation harness; solution integration completed by integrator.`
+- Corrective pass: deterministic bounded traversal and truncated-scan ambiguity handling are now part of the accepted baseline.
 
 ## Integrator acceptance
 - The integrator added the semantics projects and dedicated validation harness to `RavenDB.TestRunner.McpServer.sln`.
 - Central validation was rerun with the SDK 10 override:
   - solution build succeeded
   - `--no-build` execution of the semantics validation harness succeeded
+  - corrective validation increased the harness to 5 checks

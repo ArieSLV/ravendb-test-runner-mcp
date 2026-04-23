@@ -2,6 +2,9 @@ namespace RavenDB.TestRunner.McpServer.Semantics.Abstractions;
 
 public sealed class WorkspaceLineDetector : IWorkspaceLineDetector
 {
+    private const int StandardAmbiguityScoreGap = 10;
+    private const int TruncatedScanAmbiguityScoreGap = 20;
+
     private readonly IReadOnlyList<ISemanticPlugin> _plugins;
 
     public WorkspaceLineDetector(IEnumerable<ISemanticPlugin> plugins)
@@ -41,10 +44,17 @@ public sealed class WorkspaceLineDetector : IWorkspaceLineDetector
             if (selectedCandidate.Score < 40)
                 notes.Add("Selected repo line is low confidence because the available evidence was weak or conflicting.");
 
-            if (candidates.Length > 1 && selectedCandidate.Score - candidates[1].Score <= 10)
+            var ambiguityScoreGap = inspection.ScanWasTruncated
+                ? TruncatedScanAmbiguityScoreGap
+                : StandardAmbiguityScoreGap;
+
+            if (candidates.Length > 1 && selectedCandidate.Score - candidates[1].Score <= ambiguityScoreGap)
             {
                 isAmbiguous = true;
-                notes.Add("Top repo-line candidates are within 10 points of each other.");
+                notes.Add(
+                    inspection.ScanWasTruncated
+                        ? "Truncated scan requires stronger separation; top repo-line candidates are within 20 points of each other."
+                        : "Top repo-line candidates are within 10 points of each other.");
             }
         }
 

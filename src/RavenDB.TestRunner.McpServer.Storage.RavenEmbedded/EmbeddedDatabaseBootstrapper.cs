@@ -22,7 +22,13 @@ public static class EmbeddedDatabaseBootstrapper
         Directory.CreateDirectory(options.DataDirectory);
 
         ServerOptions serverOptions = CreateServerOptions(options, resolvedLicense);
-        EmbeddedServer.Instance.StartServer(serverOptions);
+        var requestedServerConfiguration = EmbeddedServerConfiguration.From(options, resolvedLicense);
+        var lifecycleState = await ProcessWideEmbeddedServerLifecycle.Instance
+            .EnsureStartedAsync(
+                requestedServerConfiguration,
+                () => EmbeddedServer.Instance.StartServer(serverOptions),
+                cancellationToken)
+            .ConfigureAwait(false);
 
         DatabaseOptions databaseOptions = new(new DatabaseRecord
         {
@@ -36,6 +42,7 @@ public static class EmbeddedDatabaseBootstrapper
             resolvedLicense,
             options.DatabaseName,
             options.DataDirectory,
+            lifecycleState,
             DocumentCollectionNames.All,
             ArtifactStorageKinds.RavenAttachment);
     }

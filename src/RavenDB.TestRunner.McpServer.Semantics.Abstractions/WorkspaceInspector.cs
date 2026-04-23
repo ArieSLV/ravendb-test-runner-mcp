@@ -36,8 +36,8 @@ public static class WorkspaceInspector
 
         List<string> relativeFilePaths = [];
         List<WorkspacePackageReference> packageReferences = [];
-        var pending = new Stack<(string DirectoryPath, int Depth)>();
-        pending.Push((fullRootPath, 0));
+        var pending = new Queue<(string DirectoryPath, int Depth)>();
+        pending.Enqueue((fullRootPath, 0));
 
         var scanWasTruncated = false;
         var hasSlowTestsIssuesProject = false;
@@ -49,20 +49,20 @@ public static class WorkspaceInspector
 
         while (pending.Count > 0 && stopRequested is false)
         {
-            var (directoryPath, depth) = pending.Pop();
+            var (directoryPath, depth) = pending.Dequeue();
 
             if (depth < effectiveOptions.MaxDirectoryDepth)
             {
-                foreach (var childDirectory in EnumerateDirectories(directoryPath))
+                foreach (var childDirectory in EnumerateDirectories(directoryPath)
+                             .Where(childDirectory => IgnoredDirectories.Contains(Path.GetFileName(childDirectory)) is false)
+                             .OrderBy(childDirectory => NormalizeRelativePath(fullRootPath, childDirectory), StringComparer.Ordinal))
                 {
-                    if (IgnoredDirectories.Contains(Path.GetFileName(childDirectory)))
-                        continue;
-
-                    pending.Push((childDirectory, depth + 1));
+                    pending.Enqueue((childDirectory, depth + 1));
                 }
             }
 
-            foreach (var filePath in EnumerateFiles(directoryPath))
+            foreach (var filePath in EnumerateFiles(directoryPath)
+                         .OrderBy(filePath => NormalizeRelativePath(fullRootPath, filePath), StringComparer.Ordinal))
             {
                 var extension = Path.GetExtension(filePath);
                 if (InterestingExtensions.Contains(extension) is false)

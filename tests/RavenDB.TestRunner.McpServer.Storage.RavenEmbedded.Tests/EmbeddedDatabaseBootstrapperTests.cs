@@ -24,6 +24,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
 
         try
         {
+            Assert.False(string.IsNullOrWhiteSpace(result.LifecycleState.ServerConfigurationFingerprint));
             Assert.Equal(ArtifactStorageKinds.RavenAttachment, result.AuthoritativeArtifactStorageKind);
             Assert.Contains("ArtifactRefs", result.MandatoryCollections, StringComparer.Ordinal);
 
@@ -78,10 +79,81 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         }
     }
 
+    [Fact]
+    public async Task ProcessWideLifecycle_ReusesMatchingServerConfiguration_WithoutRestartingServer()
+    {
+        var lifecycle = new ProcessWideEmbeddedServerLifecycle();
+        var dataDirectory = Path.Combine(Path.GetTempPath(), "RTRMS", "wp-b-001-lifecycle", Guid.NewGuid().ToString("N"));
+        var firstConfiguration = CreateLifecycleConfiguration("db-one", dataDirectory);
+        var secondConfiguration = CreateLifecycleConfiguration("db-two", dataDirectory);
+        var startCount = 0;
+
+        var first = await lifecycle.EnsureStartedAsync(
+            firstConfiguration,
+            () => startCount++,
+            CancellationToken.None);
+
+        var second = await lifecycle.EnsureStartedAsync(
+            secondConfiguration,
+            () => startCount++,
+            CancellationToken.None);
+
+        Assert.Equal(1, startCount);
+        Assert.True(first.StartedInCurrentCall);
+        Assert.False(first.ReusedExistingProcessServer);
+        Assert.False(second.StartedInCurrentCall);
+        Assert.True(second.ReusedExistingProcessServer);
+        Assert.Equal(first.ServerConfigurationFingerprint, second.ServerConfigurationFingerprint);
+    }
+
+    [Fact]
+    public async Task ProcessWideLifecycle_RejectsConflictingServerConfiguration()
+    {
+        var lifecycle = new ProcessWideEmbeddedServerLifecycle();
+        var firstConfiguration = CreateLifecycleConfiguration(
+            "db-one",
+            Path.Combine(Path.GetTempPath(), "RTRMS", "wp-b-001-lifecycle", Guid.NewGuid().ToString("N")));
+        var conflictingConfiguration = CreateLifecycleConfiguration(
+            "db-two",
+            Path.Combine(Path.GetTempPath(), "RTRMS", "wp-b-001-lifecycle", Guid.NewGuid().ToString("N")));
+        var startCount = 0;
+
+        await lifecycle.EnsureStartedAsync(
+            firstConfiguration,
+            () => startCount++,
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => lifecycle.EnsureStartedAsync(
+                conflictingConfiguration,
+                () => startCount++,
+                CancellationToken.None));
+
+        Assert.Equal(1, startCount);
+        Assert.Contains("one EmbeddedServer configuration per process", exception.Message, StringComparison.Ordinal);
+    }
+
     private sealed class ArtifactRefProbeDocument
     {
         public string ArtifactKind { get; init; } = string.Empty;
 
         public DateTime CreatedAtUtc { get; init; }
+    }
+
+    private static EmbeddedServerConfiguration CreateLifecycleConfiguration(
+        string databaseName,
+        string dataDirectory)
+    {
+        EmbeddedStorageBootstrapOptions options = new(databaseName, dataDirectory)
+        {
+            ExplicitLicense = "test-license",
+            ServerUrl = "http://127.0.0.1:0"
+        };
+        ResolvedEmbeddedLicense resolvedLicense = new(
+            EmbeddedLicenseSourceKind.ExplicitConfigurationString,
+            "test-license",
+            LicensePath: null);
+
+        return EmbeddedServerConfiguration.From(options, resolvedLicense);
     }
 }

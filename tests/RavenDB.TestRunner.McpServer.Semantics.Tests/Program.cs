@@ -8,6 +8,8 @@ namespace RavenDB.TestRunner.McpServer.Semantics.Tests;
 
 internal static class Program
 {
+    private const int ValidationCount = 5;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -32,10 +34,11 @@ internal static class Program
         RunValidation(failures, "v7.1 fixture detection and snapshot", ValidateV71Fixture);
         RunValidation(failures, "v7.2 fixture detection and snapshot", ValidateV72Fixture);
         RunValidation(failures, "richer evidence overrides a conflicting branch line", ValidateConflictingBranchEvidence);
+        RunValidation(failures, "bounded scan truncation is deterministic and ambiguity-aware", ValidateDeterministicTruncation);
 
         if (failures.Count == 0)
         {
-            Console.WriteLine($"Validated {4} workspace detection and capability checks.");
+            Console.WriteLine($"Validated {ValidationCount} workspace detection and capability checks.");
             return 0;
         }
 
@@ -117,6 +120,34 @@ internal static class Program
         EnsureEqual(RavenV71Semantics.SemanticPluginId, detection.PluginId, "conflicting branch should still route to v7.1 semantics");
     }
 
+    private static void ValidateDeterministicTruncation()
+    {
+        using var forwardFixture = WorkspaceFixture.CreateDeterministicTruncation(reverseCreationOrder: false);
+        using var reverseFixture = WorkspaceFixture.CreateDeterministicTruncation(reverseCreationOrder: true);
+        WorkspaceScanOptions scanOptions = new(MaxFiles: 5, MaxDirectoryDepth: 4);
+
+        var forwardInspection = WorkspaceInspector.Scan(forwardFixture.RootPath, options: scanOptions);
+        var reverseInspection = WorkspaceInspector.Scan(reverseFixture.RootPath, options: scanOptions);
+
+        string[] expectedFiles =
+        [
+            "Directory.Packages.props",
+            "alpha/AlphaFirst.cs",
+            "beta/BetaMiddle.cs",
+            "root-a.cs",
+            "root-c.cs"
+        ];
+
+        Ensure(forwardInspection.ScanWasTruncated, "forward fixture should report truncation.");
+        Ensure(reverseInspection.ScanWasTruncated, "reverse fixture should report truncation.");
+        EnsureSequenceEqual(expectedFiles, forwardInspection.RelativeFilePaths, "forward truncated file set");
+        EnsureSequenceEqual(expectedFiles, reverseInspection.RelativeFilePaths, "reverse truncated file set");
+
+        var detection = Detector.Detect(forwardInspection);
+        Ensure(detection.IsAmbiguous, "truncated close-scoring evidence should force ambiguity.");
+        EnsureEqual(RepoLines.V62, detection.RepoLine, "truncated top candidate remains deterministic");
+    }
+
     private static CapabilityMatrix ValidateFixture(
         WorkspaceFixture fixture,
         string expectedRepoLine,
@@ -168,5 +199,14 @@ internal static class Program
     {
         if (EqualityComparer<T>.Default.Equals(expected, actual) is false)
             throw new InvalidOperationException($"{message}: expected '{expected}', got '{actual}'.");
+    }
+
+    private static void EnsureSequenceEqual<T>(IReadOnlyList<T> expected, IReadOnlyList<T> actual, string message)
+    {
+        if (expected.SequenceEqual(actual) is false)
+        {
+            throw new InvalidOperationException(
+                $"{message}: expected '{string.Join(", ", expected)}', got '{string.Join(", ", actual)}'.");
+        }
     }
 }
