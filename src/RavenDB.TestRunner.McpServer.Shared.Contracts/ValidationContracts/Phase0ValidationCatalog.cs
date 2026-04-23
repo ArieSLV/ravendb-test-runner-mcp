@@ -133,7 +133,7 @@ public static class Phase0ValidationCatalog
                     "Lifecycle mutation rules remain explicit before RavenDB runtime work begins.")
             ],
             "Missing persisted-family coverage or missing concurrency expectations blocks Phase 0 completion.",
-            "The carry-forward STORAGE_MODEL example asymmetry is classified separately as a documented non-blocking follow-up."),
+            "STORAGE_MODEL now mirrors the full persisted document-family ID-pattern baseline."),
 
         new(
             "phase0.event_contracts",
@@ -246,25 +246,6 @@ public static class Phase0ValidationCatalog
             ],
             "The current shell environment points MSBuild SDK resolution at 8.0.403, so Phase 0 validation builds require a per-command override. This is an operator-environment issue, not product-contract drift.",
             "Address deterministic build environment sanitization in later validation/build subsystem planning without blocking Phase 0 completion.",
-            BlocksPhase0Completion: false,
-            BlocksWpBStart: false,
-            BlocksWpCStart: false),
-
-        new(
-            "PHASE0-003-storage-id-example-asymmetry",
-            ValidationFindingClassifications.KnownNonBlockingRisk,
-            "STORAGE_MODEL example coverage is narrower than the implementation-facing ID-pattern baseline",
-            [
-                "WP_A_003_document_id_and_collection_conventions",
-                "WP_A_006_phase0_validation_harness"
-            ],
-            [
-                "src/RavenDB.TestRunner.McpServer.Shared.Contracts/DocumentConventions/DocumentIdPatterns.cs",
-                "src/RavenDB.TestRunner.McpServer.Shared.Contracts/DocumentConventions/DocumentConventionCatalog.cs",
-                "design-doc/docs/contracts/STORAGE_MODEL.md"
-            ],
-            "Phase 0 implementation-facing contracts enumerate 20 persisted document families, while the carried-forward note says STORAGE_MODEL currently shows example ID patterns for 12 families. Because the design note is framed as examples rather than a complete normative matrix, this is a documented non-blocking asymmetry rather than blocking drift.",
-            "Review whether STORAGE_MODEL should mirror all 20 implementation-facing patterns during later documentation sync, without changing the frozen Phase 0 contract surface here.",
             BlocksPhase0Completion: false,
             BlocksWpBStart: false,
             BlocksWpCStart: false)

@@ -28,7 +28,7 @@
 - Naming review: Phase 0 validation artifacts remain under `RavenDB.TestRunner.McpServer.Shared.Contracts`.
 - Phase 0 coverage review: the validation harness covers all five completed implementation-facing Phase 0 contract areas (`WP_A_001` through `WP_A_005`).
 - Classification review: the harness explicitly distinguishes `contract_complete`, `known_non_blocking_risk`, and `blocking_drift`.
-- Carry-forward review: the `WP_A_003` STORAGE_MODEL example-pattern asymmetry is explicitly classified as a non-blocking documentation-sync follow-up rather than silent drift.
+- Carry-forward review: the previous `WP_A_003` STORAGE_MODEL example-pattern asymmetry has been resolved by synchronizing `STORAGE_MODEL.md` to the full implementation-facing 20-pattern baseline.
 - Gate review: the Phase 0 contract-freeze gate is marked satisfied because all checks are contract-complete and there are no blocking findings.
 - Diff hygiene: `git diff --check` passed.
 
@@ -39,7 +39,7 @@
 
 ## Risks / follow-ups
 - `ENV-001` remains open: the current shell still pins `MSBuildSDKsPath` to SDK 8.0.403, so .NET 10 validation requires a per-command override. This is non-blocking for Phase 0 completion.
-- Carry forward the `WP_A_003` note that the implementation-facing ID-pattern baseline is exhaustive for 20 persisted document families while `STORAGE_MODEL.md` currently shows examples for 12 families. This is recorded as a non-blocking documentation-sync follow-up.
+- The previous `WP_A_003` documentation-sync follow-up for STORAGE_MODEL ID-pattern examples has been resolved by synchronizing the storage contract to the full 20-pattern baseline.
 
 ## ADR or design delta notes
 - No ADR or design delta required.

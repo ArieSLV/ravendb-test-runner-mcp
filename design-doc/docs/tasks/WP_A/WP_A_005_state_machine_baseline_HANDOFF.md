@@ -33,7 +33,7 @@
 
 ## Risks / follow-ups
 - `ENV-001` remains open: the current shell still pins `MSBuildSDKsPath` to SDK 8.0.403, so .NET 10 validation requires a per-command override.
-- Carry forward to `WP_A_006`: `WP_A_003` introduced exhaustive implementation-facing ID patterns for all 20 persisted document families, while `STORAGE_MODEL.md` currently lists example patterns for 12 families.
+- Carry forward to `WP_A_006`: `WP_A_003` introduced exhaustive implementation-facing ID patterns for all 20 persisted document families, while `STORAGE_MODEL.md` currently lists example patterns for 12 families. This was later resolved by synchronizing `STORAGE_MODEL.md` to the full 20-pattern baseline.
 
 ## ADR or design delta notes
 - No ADR or design delta required.

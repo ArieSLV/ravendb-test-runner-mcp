@@ -42,19 +42,27 @@ Mandatory collections:
 - `CleanupJournal`
 
 ## ID conventions
-Examples:
-- `workspaces/<workspace-hash>`
-- `semantic-snapshots/<workspace-hash>/<sem-hash>`
-- `capability-matrices/<workspace-hash>/<line>/<hash>`
-- `build-graphs/<workspace-hash>/<scope-hash>/<hash>`
-- `build-plans/<workspace-hash>/<date>/<guid>`
-- `builds/<workspace-hash>/<date>/<guid>`
-- `build-readiness/<workspace-hash>/<fingerprint>`
-- `run-plans/<workspace-hash>/<date>/<guid>`
-- `runs/<workspace-hash>/<date>/<guid>`
-- `attempts/<run-id>/<attempt-index>`
-- `artifacts/<owner-kind>/<owner-id>/<kind>/<guid>`
-- `flaky-findings/<test-id>/<window>/<guid>`
+The following document ID patterns are authoritative for the mandatory collections:
+- `WorkspaceSnapshots` -> `workspaces/<workspace-hash>`
+- `SemanticSnapshots` -> `semantic-snapshots/<workspace-hash>/<sem-hash>`
+- `CapabilityMatrices` -> `capability-matrices/<workspace-hash>/<line>/<hash>`
+- `BuildGraphSnapshots` -> `build-graphs/<workspace-hash>/<scope-hash>/<hash>`
+- `BuildPlans` -> `build-plans/<workspace-hash>/<date>/<guid>`
+- `BuildExecutions` -> `builds/<workspace-hash>/<date>/<guid>`
+- `BuildResults` -> `build-results/<build-id>`
+- `BuildReadinessTokens` -> `build-readiness/<workspace-hash>/<fingerprint>`
+- `TestCatalogEntries` -> `test-catalog/<workspace-hash>/<catalog-version>/<test-id-hash>`
+- `RunPlans` -> `run-plans/<workspace-hash>/<date>/<guid>`
+- `RunExecutions` -> `runs/<workspace-hash>/<date>/<guid>`
+- `RunResults` -> `run-results/<run-id>`
+- `AttemptPlans` -> `attempt-plans/<run-id>/<attempt-index>`
+- `AttemptResults` -> `attempts/<run-id>/<attempt-index>`
+- `ArtifactRefs` -> `artifacts/<owner-kind>/<owner-id>/<kind>/<guid>`
+- `FlakyFindings` -> `flaky-findings/<test-id>/<window>/<guid>`
+- `QuarantineActions` -> `quarantine-actions/<test-id>/<guid>`
+- `Settings` -> `settings/<scope>/<key>`
+- `EventCheckpoints` -> `event-checkpoints/<stream-kind>/<owner-id>`
+- `CleanupJournal` -> `cleanup-journal/<date>/<guid>`
 
 ## Indexes
 Required indexes at minimum:
