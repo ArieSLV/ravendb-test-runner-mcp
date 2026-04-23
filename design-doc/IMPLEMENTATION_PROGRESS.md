@@ -24,7 +24,7 @@ Track implementation progress for RavenDB Test Runner MCP Server.
 ## Active Workstreams
 | Workstream | Owner/Agent | Status | Scope | Notes |
 |---|---|---|---|---|
-| WP_A document ID and collection conventions | integrating-agent | Done | WP_A_003 document ID and collection conventions | Phase 0 only; WP_B/WP_C remain gated until WP_A_001-WP_A_006 are done or explicitly deferred |
+| WP_A event contract baseline | integrating-agent | Done | WP_A_004 event contract baseline | Phase 0 only; WP_B/WP_C remain gated until WP_A_001-WP_A_006 are done or explicitly deferred |
 
 ## Open Risks / Blockers
 | ID | Status | Owner/Agent | Description | Next Action |
@@ -42,7 +42,7 @@ Track implementation progress for RavenDB Test Runner MCP Server.
 | WP_A_001_solution_scaffold_and_name_freeze | Done | integrating-agent | `42203b3` | `dotnet build .\RavenDB.TestRunner.McpServer.sln -v minimal` succeeded with `MSBuildSDKsPath` set to .NET SDK 10.0.203; naming review, cross-link validation, and WP_A_001-scoped contract completeness review passed | Handoff: `docs/tasks/WP_A/WP_A_001_solution_scaffold_and_name_freeze_HANDOFF.md`; no WP_A_002 contract mapping |
 | WP_A_002_shared_contracts_project_layout | Done | integrating-agent | `024e8c6` | `dotnet build .\RavenDB.TestRunner.McpServer.sln -v minimal` succeeded with per-command `MSBuildSDKsPath` set to .NET SDK 10.0.203; contract-document mapping review covered 13/13 contract docs; no runtime dependencies introduced | Handoff: `docs/tasks/WP_A/WP_A_002_shared_contracts_project_layout_HANDOFF.md`; ENV-001 remains open; WP_B/WP_C remain gated |
 | WP_A_003_document_id_and_collection_conventions | Done | integrating-agent | `4eff359` | `dotnet build .\RavenDB.TestRunner.McpServer.sln -v minimal` succeeded with per-command `MSBuildSDKsPath` set to .NET SDK 10.0.203; 20/20 collection names and 20/20 document ID patterns covered; no runtime dependencies introduced; `git diff --check` passed | Handoff: `docs/tasks/WP_A/WP_A_003_document_id_and_collection_conventions_HANDOFF.md`; ENV-001 remains open; WP_B/WP_C remain gated |
-| WP_A_004_event_contract_baseline | Not Started |  |  |  |  |
+| WP_A_004_event_contract_baseline | Done | integrating-agent | N/A (pending commit) | `dotnet build .\RavenDB.TestRunner.McpServer.sln -v minimal` succeeded with per-command `MSBuildSDKsPath` set to .NET SDK 10.0.203; event envelope 7/7 fields, 5/5 stream patterns, and 39/39 event types covered; ordering/cursor/replay semantics represented; no runtime dependencies introduced; `git diff --check` passed | Handoff: `docs/tasks/WP_A/WP_A_004_event_contract_baseline_HANDOFF.md`; ENV-001 remains open; WP_B/WP_C remain gated |
 | WP_A_005_state_machine_baseline | Not Started |  |  |  |  |
 | WP_A_006_phase0_validation_harness | Not Started |  |  |  |  |
 | WP_B_001_embedded_bootstrap_and_database_init | Not Started |  |  |  |  |
