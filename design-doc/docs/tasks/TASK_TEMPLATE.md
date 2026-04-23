@@ -1,52 +1,40 @@
-# TASK_TEMPLATE
+# TASK_TEMPLATE.md
 
 ## Task ID
-
-`<WP_X_###>`
+`WP_X_000_example`
 
 ## Title
+Short implementation-ready title.
 
-Short implementation-focused title.
+## Purpose
+Why this task exists.
 
 ## Scope
-
-What this task includes.
+Concrete bounded scope.
 
 ## Out of scope
-
-What this task must not attempt.
+Explicit exclusions.
 
 ## Prerequisites
-
-- required prior tasks
-- required contracts
-- required ADR awareness
+Required earlier tasks/contracts.
 
 ## Touched modules/files
+List exact modules and expected document/code areas.
 
-List exact module directories, packages, and documents expected to change.
+## Inputs
+List contract docs, ADRs, and phase/work-package docs.
+
+## Expected outputs
+Concrete deliverables.
 
 ## Implementation notes
-
-- required invariants
-- pitfalls
-- branch/version notes
-- security or redaction notes if relevant
+Bounded guidance, constraints, and pitfalls.
 
 ## Validation steps
-
-- exact tests to run
-- exact checks to perform
-- expected artifacts/evidence
+Exact tests/checks.
 
 ## Definition of done
-
-Concrete completion criteria.
+Objective completion criteria.
 
 ## Handoff expectations
-
-- summary
-- touched contracts
-- validation evidence
-- open risks
-- follow-up tasks
+Use `HANDOFF_TEMPLATE.md` and mention contract drift if any.

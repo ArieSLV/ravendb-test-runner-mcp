@@ -1,85 +1,97 @@
-# Task Index
+# TASK_INDEX.md
 
 ## Purpose
+This index lists the starter task backlog for RavenDB Test Runner MCP Server.
 
-Track the initial execution backlog. Status defaults to `Planned` until updated by the integrator.
+## Usage rules
+- pick tasks through the relevant work package
+- do not start tasks that violate phase prerequisites
+- update task status in implementation tracking outside this static pack or via agreed integrator process
 
 ## WP_A
-
-- `WP_A_001` — Create the solution, project folders, Directory.Build props, and placeholder project references. (`Planned`) -> `docs/tasks/WP_A/WP_A_001_solution_scaffold.md`
-- `WP_A_002` — Create the shared contracts package and initial DTO/type definitions aligned with frozen contracts. (`Planned`) -> `docs/tasks/WP_A/WP_A_002_contracts_package.md`
-- `WP_A_003` — Implement document ID helpers, naming constants, and collection name constants. (`Planned`) -> `docs/tasks/WP_A/WP_A_003_document_and_id_conventions.md`
-- `WP_A_004` — Create event envelope types, core event names, and state-machine enums. (`Planned`) -> `docs/tasks/WP_A/WP_A_004_event_contract_baseline.md`
-- `WP_A_005` — Create contract test harness and document-validation checks used by later work packages. (`Planned`) -> `docs/tasks/WP_A/WP_A_005_phase0_validation_harness.md`
+- `WP_A_001_solution_scaffold_and_name_freeze` — Create the solution scaffold and rename the implementation surface to the canonical product/module names.
+- `WP_A_002_shared_contracts_project_layout` — Create the shared contracts/package layout and map each contract document to a target project/module.
+- `WP_A_003_document_id_and_collection_conventions` — Freeze document ID patterns, collection names, and module ownership tables.
+- `WP_A_004_event_contract_baseline` — Freeze the event envelope, ordering rules, cursors, and replay semantics across build and test subsystems.
+- `WP_A_005_state_machine_baseline` — Freeze build/run/attempt lifecycle state machines and optimistic concurrency expectations.
+- `WP_A_006_phase0_validation_harness` — Create validation checklists and contract approval gates required before any production implementation starts.
 
 ## WP_B
-
-- `WP_B_001` — Implement RavenDB Embedded startup, license probe order, and database ensure flow. (`Planned`) -> `docs/tasks/WP_B/WP_B_001_embedded_bootstrap_and_database_init.md`
-- `WP_B_002` — Create collection conventions, index bootstrap, and optimistic concurrency configuration. (`Planned`) -> `docs/tasks/WP_B/WP_B_002_collections_indexes_and_concurrency.md`
-- `WP_B_003` — Implement RunArtifact persistence and artifact metadata registration service. (`Planned`) -> `docs/tasks/WP_B/WP_B_003_artifact_metadata_registration.md`
-- `WP_B_004` — Implement canonical filesystem layout manager and path normalization. (`Planned`) -> `docs/tasks/WP_B/WP_B_004_filesystem_artifact_layout.md`
-- `WP_B_005` — Implement startup recovery checks, orphan detection, and cleanup journal primitives. (`Planned`) -> `docs/tasks/WP_B/WP_B_005_restart_recovery_and_cleanup_journal.md`
+- `WP_B_001_embedded_bootstrap_and_database_init` — Bootstrap RavenDB Embedded, database initialization, and mandatory licensed startup checks.
+- `WP_B_002_collections_indexes_and_optimistic_concurrency` — Implement collection creation, indexes, revisions policy decisions, and optimistic concurrency baseline.
+- `WP_B_003_artifact_metadata_and_attachment_thresholds` — Implement artifact metadata documents and attachment threshold policy for compact artifacts.
+- `WP_B_004_filesystem_artifact_layout_and_hashing` — Implement canonical filesystem layout, hashing, and path registration for large artifacts.
+- `WP_B_005_event_checkpoint_and_resume_persistence` — Persist event checkpoints and stream resume cursors for build and run streams.
+- `WP_B_006_restart_recovery_cleanup_and_retention` — Implement restart recovery, retention metadata, and cleanup job journal design.
 
 ## WP_C
-
-- `WP_C_001` — Implement workspace fingerprinting and repo line detection for v6.2/v7.1/v7.2. (`Planned`) -> `docs/tasks/WP_C/WP_C_001_workspace_line_detection.md`
-- `WP_C_002` — Define semantic plugin interfaces and router. (`Planned`) -> `docs/tasks/WP_C/WP_C_002_version_plugin_interfaces.md`
-- `WP_C_003` — Implement `RavenV62Semantics` plugin. (`Planned`) -> `docs/tasks/WP_C/WP_C_003_v62_semantics_plugin.md`
-- `WP_C_004` — Implement `RavenV71Semantics` plugin. (`Planned`) -> `docs/tasks/WP_C/WP_C_004_v71_semantics_plugin.md`
-- `WP_C_005` — Implement `RavenV72Semantics`, category/requirement extraction, and catalog persistence. (`Planned`) -> `docs/tasks/WP_C/WP_C_005_v72_semantics_plugin_and_catalog_persistence.md`
+- `WP_C_001_workspace_and_repo_line_detection` — Implement workspace detection, branch line routing, and capability discovery for v6.2, v7.1, and v7.2.
+- `WP_C_002_semantic_plugin_contracts` — Create semantic plugin interfaces and shared capability routing abstractions.
+- `WP_C_003_v62_semantics_plugin` — Implement the v6.2 plugin, including xUnit v2 assumptions and no-AI capability baseline.
+- `WP_C_004_v71_semantics_plugin` — Implement the v7.1 plugin, including transitional AI capabilities and xUnit v2-era behavior.
+- `WP_C_005_v72_semantics_plugin` — Implement the v7.2 plugin, including xUnit v3-era capabilities and modern test topology.
+- `WP_C_006_catalog_persistence_and_capability_matrix` — Persist semantic snapshots, category catalogs, and compatibility matrices in RavenDB Embedded.
 
 ## WP_D
-
-- `WP_D_001` — Implement structured selector normalization and expert-filter wrapper behavior. (`Planned`) -> `docs/tasks/WP_D/WP_D_001_selector_normalization_engine.md`
-- `WP_D_002` — Implement preflight readiness, capability checks, and deterministic skip prediction. (`Planned`) -> `docs/tasks/WP_D/WP_D_002_preflight_evaluator.md`
-- `WP_D_003` — Implement project-step command synthesis, env overlay, and repro command rendering. (`Planned`) -> `docs/tasks/WP_D/WP_D_003_command_synthesizer.md`
-- `WP_D_004` — Implement run queue, one-active-run-per-workspace policy, process supervision, cancellation, and timeout kill behavior. (`Planned`) -> `docs/tasks/WP_D/WP_D_004_scheduler_and_process_supervisor.md`
-- `WP_D_005` — Integrate planning, scheduling, and execution into end-to-end run lifecycle. (`Planned`) -> `docs/tasks/WP_D/WP_D_005_planner_execution_integration.md`
+- `WP_D_001_build_domain_contracts_and_policies` — Implement build domain contracts, build policy enums, and the explicit build ownership model.
+- `WP_D_002_build_graph_analyzer` — Implement build graph analysis for solution/project scopes and deterministic build target enumeration.
+- `WP_D_003_build_fingerprint_and_reuse_engine` — Implement build fingerprints, reuse decisions, readiness tokens, and stale-build invalidation logic.
+- `WP_D_004_build_scheduler_and_execution_engine` — Implement build scheduler, restore/build/clean/rebuild orchestration, and process supervision.
+- `WP_D_005_build_artifacts_status_and_binlog_capture` — Implement binlog/text output capture, build artifacts, live build status, and build result documents.
+- `WP_D_006_build_readiness_integration` — Expose build readiness and reuse decisions to the test planning subsystem and browser/MCP surfaces.
 
 ## WP_E
-
-- `WP_E_001` — Implement stdout/stderr/merged capture and artifact registration. (`Planned`) -> `docs/tasks/WP_E/WP_E_001_console_capture_pipeline.md`
-- `WP_E_002` — Implement TRX ingestion and optional JUnit handling. (`Planned`) -> `docs/tasks/WP_E/WP_E_002_trx_junit_harvesting.md`
-- `WP_E_003` — Map raw execution outcomes to normalized failure classifications. (`Planned`) -> `docs/tasks/WP_E/WP_E_003_failure_taxonomy_mapper.md`
-- `WP_E_004` — Build canonical `RunResult` and `NormalizedTestResult` outputs. (`Planned`) -> `docs/tasks/WP_E/WP_E_004_normalized_result_builder.md`
-- `WP_E_005` — Implement predicted-vs-actual reconciliation and diagnostics escalation metadata hooks. (`Planned`) -> `docs/tasks/WP_E/WP_E_005_predicted_vs_actual_and_diag_hooks.md`
+- `WP_E_001_selector_normalization_engine` — Implement structured selector normalization and expert-mode raw filter isolation.
+- `WP_E_002_preflight_evaluator` — Implement preflight evaluation, deterministic skip prediction, and runtime unknown reporting.
+- `WP_E_003_test_run_planner` — Implement run planning with explicit build dependency resolution and artifact path generation.
+- `WP_E_004_scheduler_and_process_supervisor` — Implement run scheduling, single-workspace process discipline, cancellation, and timeout handling.
+- `WP_E_005_build_to_test_handoff` — Implement explicit build-to-test handoff so test execution never performs chaotic hidden rebuilds.
+- `WP_E_006_repro_commands_and_execution_summaries` — Implement exact repro commands and execution summaries for builds and runs.
 
 ## WP_F
-
-- `WP_F_001` — Implement shared MCP handler orchestration layer independent of transport. (`Planned`) -> `docs/tasks/WP_F/WP_F_001_mcp_common_handler_layer.md`
-- `WP_F_002` — Implement the primary local Streamable HTTP MCP host. (`Planned`) -> `docs/tasks/WP_F/WP_F_002_streamable_http_mcp_host.md`
-- `WP_F_003` — Implement the stdio compatibility host with strict stdout hygiene. (`Planned`) -> `docs/tasks/WP_F/WP_F_003_stdio_bridge_host.md`
-- `WP_F_004` — Implement projects/categories/capabilities/discover/preflight/plan tools. (`Planned`) -> `docs/tasks/WP_F/WP_F_004_tool_set_core_a.md`
-- `WP_F_005` — Implement run/status/output/results/cancel/rerun/explain/repro/iterative/flaky tools. (`Planned`) -> `docs/tasks/WP_F/WP_F_005_tool_set_core_b.md`
+- `WP_F_001_console_capture_pipeline` — Implement stdout/stderr/merged transcript capture for build and test processes.
+- `WP_F_002_trx_junit_and_binlog_harvesting` — Implement TRX/JUnit harvesting for tests and binlog harvesting for builds.
+- `WP_F_003_failure_taxonomy_mapper` — Implement canonical failure classifications for build and test execution outcomes.
+- `WP_F_004_normalized_result_builder` — Implement normalized build/run result builders and persistence.
+- `WP_F_005_diagnostic_hooks_and_blame_artifacts` — Implement diagnostic hooks, blame-style capture, and artifact indexing.
+- `WP_F_006_predicted_vs_actual_reconciliation` — Implement reconciliation between predicted preflight outcomes and actual execution outcomes.
 
 ## WP_G
-
-- `WP_G_001` — Implement browser query endpoints for workspaces, runs, results, artifacts, and capabilities. (`Planned`) -> `docs/tasks/WP_G/WP_G_001_query_api_surface.md`
-- `WP_G_002` — Implement write endpoints for planning, running, cancellation, reruns, and quarantine actions. (`Planned`) -> `docs/tasks/WP_G/WP_G_002_command_api_surface.md`
-- `WP_G_003` — Implement SignalR hub and mapping from internal events to browser events. (`Planned`) -> `docs/tasks/WP_G/WP_G_003_signalr_hub_and_event_mapping.md`
-- `WP_G_004` — Implement SSE endpoints and cursor-based log access. (`Planned`) -> `docs/tasks/WP_G/WP_G_004_sse_and_log_cursor_endpoints.md`
-- `WP_G_005` — Implement localhost-only defaults, trusted-local auth baseline, and browser security headers as applicable. (`Planned`) -> `docs/tasks/WP_G/WP_G_005_localhost_posture_and_browser_security.md`
+- `WP_G_001_mcp_common_handler_layer` — Implement the shared MCP handler layer over the orchestration core.
+- `WP_G_002_streamable_http_mcp_host` — Implement the primary local Streamable HTTP MCP host with local-only posture.
+- `WP_G_003_stdio_bridge_host` — Implement the optional stdio bridge host with stdout protocol purity.
+- `WP_G_004_tests_toolset` — Implement the tests.* MCP tools over the shared core.
+- `WP_G_005_build_toolset` — Implement the build.* MCP tools as a first-class sibling surface.
+- `WP_G_006_progress_cancellation_and_resume` — Implement MCP progress, cancellation, and resumability-friendly behavior.
 
 ## WP_H
-
-- `WP_H_001` — Implement SPA shell, routing, layout baseline, and global stores. (`Planned`) -> `docs/tasks/WP_H/WP_H_001_ui_app_shell_and_routing.md`
-- `WP_H_002` — Implement runs list and run details pages. (`Planned`) -> `docs/tasks/WP_H/WP_H_002_runs_list_and_details.md`
-- `WP_H_003` — Implement live console, cursor consumption, and results explorer. (`Planned`) -> `docs/tasks/WP_H/WP_H_003_live_console_and_results_explorer.md`
-- `WP_H_004` — Implement artifact explorer and diagnostics pages. (`Planned`) -> `docs/tasks/WP_H/WP_H_004_artifacts_and_diagnostics_views.md`
-- `WP_H_005` — Implement flaky analysis page, settings/profiles page, and Studio-aligned styling baseline. (`Planned`) -> `docs/tasks/WP_H/WP_H_005_flaky_and_settings_views.md`
+- `WP_H_001_query_api_surface` — Implement query APIs for builds, runs, catalogs, capabilities, and settings.
+- `WP_H_002_command_api_surface` — Implement command APIs for planning, launching, cancelling, and cleaning builds/runs.
+- `WP_H_003_signalr_hub_and_event_mapping` — Implement SignalR hubs and event mapping for build/run/attempt streams.
+- `WP_H_004_sse_and_log_cursor_endpoints` — Implement SSE endpoints and cursor-based log playback endpoints.
+- `WP_H_005_build_status_and_policy_endpoints` — Implement dedicated build status, build history, and build policy endpoints.
+- `WP_H_006_localhost_security_posture` — Implement localhost binding, origin validation, and local browser safety rules.
 
 ## WP_I
-
-- `WP_I_001` — Implement iterative run request handling and attempt plan generation. (`Planned`) -> `docs/tasks/WP_I/WP_I_001_iterative_run_planner.md`
-- `WP_I_002` — Implement attempt persistence, state transitions, and attempt event publication. (`Planned`) -> `docs/tasks/WP_I/WP_I_002_attempt_lifecycle_persistence.md`
-- `WP_I_003` — Implement attempt comparison, signature diffing, and duration/env diffing. (`Planned`) -> `docs/tasks/WP_I/WP_I_003_comparison_engine.md`
-- `WP_I_004` — Implement stability signals, scoring, and quarantine proposal/accept/revoke workflow. (`Planned`) -> `docs/tasks/WP_I/WP_I_004_classification_and_quarantine.md`
-- `WP_I_005` — Implement flaky history, stability report, MCP surfaces, and UI model integration. (`Planned`) -> `docs/tasks/WP_I/WP_I_005_history_and_reporting_surfaces.md`
+- `WP_I_001_ui_app_shell_and_design_baseline` — Implement the UI shell and RavenDB Studio-aligned design baseline without hard-coupling to Studio internals.
+- `WP_I_002_runs_and_builds_list_details` — Implement combined runs/builds list and detail views with live state.
+- `WP_I_003_live_console_results_and_build_output` — Implement live console/output panes, results explorer, and build output inspectors.
+- `WP_I_004_artifacts_diagnostics_and_plan_views` — Implement artifact explorer, diagnostics views, and plan inspectors for builds and runs.
+- `WP_I_005_flaky_settings_and_policy_views` — Implement flaky analysis views, settings, and build/test policy screens.
+- `WP_I_006_accessibility_and_reconnect_behavior` — Implement keyboard navigation, reconnect handling, and degraded-mode UX.
 
 ## WP_J
+- `WP_J_001_iterative_run_planner` — Implement iterative run planning modes and attempt sequencing.
+- `WP_J_002_attempt_lifecycle_and_history_persistence` — Implement attempt lifecycle persistence and historical rollups.
+- `WP_J_003_comparison_engine` — Implement attempt/build/run comparison engine and signature drift detection.
+- `WP_J_004_stability_classification_and_scoring` — Implement stability signals, classification, and explainable scoring.
+- `WP_J_005_quarantine_policy_and_audit_trail` — Implement quarantine actions/proposals, reversibility, and audit trail requirements.
+- `WP_J_006_reporting_surfaces_and_notifications` — Implement flaky reporting surfaces for MCP, web API, and browser UI.
 
-- `WP_J_001` — Create unit and contract test matrix across shared packages. (`Planned`) -> `docs/tasks/WP_J/WP_J_001_unit_and_contract_test_matrix.md`
-- `WP_J_002` — Implement integration fixtures for v6.2, v7.1, and v7.2 workspaces. (`Planned`) -> `docs/tasks/WP_J/WP_J_002_integration_workspace_fixtures.md`
-- `WP_J_003` — Implement browser UI smoke tests, reconnect tests, and log-stream tests. (`Planned`) -> `docs/tasks/WP_J/WP_J_003_ui_and_live_transport_validation.md`
-- `WP_J_004` — Implement packaging scripts and cold-start smoke validation for the stand-alone app. (`Planned`) -> `docs/tasks/WP_J/WP_J_004_packaging_and_startup_smoke.md`
-- `WP_J_005` — Write developer/operator runbooks, troubleshooting, and upgrade notes. (`Planned`) -> `docs/tasks/WP_J/WP_J_005_runbooks_and_operator_docs.md`
+## WP_K
+- `WP_K_001_unit_and_contract_test_matrix` — Define and implement unit and contract test matrix for all subsystems.
+- `WP_K_002_cross_branch_integration_fixtures` — Implement real workspace fixtures for v6.2, v7.1, and v7.2.
+- `WP_K_003_ui_and_live_transport_validation` — Implement UI, SignalR, SSE, and reconnect validation suites.
+- `WP_K_004_build_subsystem_validation` — Implement build determinism, reuse, and no-chaotic-rebuild validation suites.
+- `WP_K_005_packaging_and_startup_smoke` — Implement packaging, startup smoke, and first-run embedded license flow validation.
+- `WP_K_006_runbooks_and_operator_docs` — Finalize runbooks, developer setup docs, and operational recovery guidance.

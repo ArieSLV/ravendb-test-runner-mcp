@@ -1,17 +1,15 @@
-# RavenMcp Execution Pack
+# RavenDB Test Runner MCP Server — Execution Pack
 
-This directory contains the full execution pack for the RavenDB Test MCP Control Plane project.
+This directory contains the full execution pack for **RavenDB Test Runner MCP Server**.
 
-Use this pack as follows:
+Highlights of this revision:
+- canonical naming consolidated around **RavenDB Test Runner MCP Server**
+- first-class **Build Subsystem** added across architecture, contracts, phases, work packages, ADRs, and tasks
+- explicit build-to-test handshake so test execution cannot trigger chaotic rebuilds
+- branch-aware support model preserved for `v6.2`, `v7.1`, and `v7.2`
 
-1. Read `AGENTS.md`
-2. Read `docs/architecture/DECISION_FREEZE.md`
-3. Read `docs/architecture/EXECUTION_PACK_INDEX.md`
-4. Freeze Phase 0 contracts
-5. Assign work packages and task cards to coding agents
-
-The authoritative project constitution is:
-- `docs/architecture/IMPLEMENTATION_SPEC.md`
-
-The full tree is listed in:
-- `EXECUTION_PACK_TREE.md`
+Start with:
+1. `AGENTS.md`
+2. `docs/architecture/DECISION_FREEZE.md`
+3. `docs/contracts/NAMING_AND_MODULE_POLICY.md`
+4. `docs/phases/PHASE_0_CONTRACT_FREEZE.md`

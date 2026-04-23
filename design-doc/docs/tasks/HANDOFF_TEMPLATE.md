@@ -1,25 +1,15 @@
-# HANDOFF_TEMPLATE
+# HANDOFF_TEMPLATE.md
 
-## Task ID(s)
+## Completed task
 
-## Summary of work completed
-
-## Touched modules/files
+## What changed
 
 ## Touched contracts
 
-State either:
-- `No contract delta`
-or list every touched contract file and the exact semantic change.
+## Touched modules/files
 
-## Validation executed
+## Validation performed
 
-- tests run
-- manual checks
-- artifacts or screenshots if applicable
+## Risks / follow-ups
 
-## Open risks / deferred items
-
-## Follow-up task suggestions
-
-## Merge notes for integrator
+## ADR or design delta notes

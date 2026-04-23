@@ -1,80 +1,60 @@
-# PHASE 0 CONTRACT FREEZE
+# Phase 0 — Contract Freeze and Naming Consolidation
 
 ## Purpose
-
-Freeze solution skeleton, contracts, IDs, event model, state machines, and tasking structure before code implementation broadens.
+Freeze shared contracts, naming, module boundaries, storage conventions, build/test lifecycles, and event schemas before any production code lands.
 
 ## Prerequisites
-
-None
+none
 
 ## In scope
-
-- Solution skeleton, contract package, task system, ADR baseline
-- contract-aligned implementation and validation artifacts
-- update of task statuses and handoff notes for this phase
+- approved contract set
+- approved naming/module policy
+- approved state machines
+- solution skeleton
 
 ## Out of scope
+- production UI polish beyond what this phase requires
+- unrelated contract rewrites outside explicit deltas
+- ad hoc architectural renaming not covered by the frozen naming policy
 
-- All production behavior implementation
-- architectural redesign beyond ADR-approved deltas
-
-## Touched projects/modules
-
-- RavenMcp.Core.Abstractions
-- RavenMcp.Domain
-- RavenMcp.Shared.Contracts
-- docs/contracts/*
-- docs/tasks/*
-- docs/adr/*
+## Touched modules
+- RavenDB.TestRunner.McpServer.Core.Abstractions
+- RavenDB.TestRunner.McpServer.Domain
+- RavenDB.TestRunner.McpServer.Shared.Contracts
 
 ## Required contracts
-
-- `docs/contracts/DOMAIN_MODEL.md`
-- `docs/contracts/VERSIONING_AND_CAPABILITIES.md`
-- `docs/contracts/STORAGE_MODEL.md`
-- `docs/contracts/EVENT_MODEL.md`
-- `docs/contracts/STATE_MACHINES.md`
-- `docs/contracts/MCP_TOOLS.md`
-- `docs/contracts/WEB_API.md`
-- `docs/contracts/FRONTEND_VIEW_MODELS.md`
-- `docs/contracts/ERROR_TAXONOMY.md`
-- `docs/contracts/SECURITY_AND_REDACTION.md`
+- NAMING_AND_MODULE_POLICY.md
+- DOMAIN_MODEL.md
+- EVENT_MODEL.md
+- STATE_MACHINES.md
 
 ## Deliverables
-
-- phase-specific implementation artifacts
-- updated task statuses
-- phase completion note
-- validation evidence
+- approved contract set
+- approved naming/module policy
+- approved state machines
+- solution skeleton
 
 ## Acceptance criteria
-
-- all mandatory deliverables for the phase exist
-- referenced contracts are honored
-- phase-level tests pass or are explicitly marked as blocked with reason
-- no undocumented architectural drift is introduced
+- phase outputs are stored in the expected modules and registries
+- phase-specific contracts remain satisfied
+- no unresolved critical TODOs remain inside this phase’s declared scope
+- human integrator can approve handoff to dependent phases
 
 ## Validation gates
-
-- unit and/or contract tests relevant to this phase
-- integration tests where the phase introduces runtime behavior
-- review by the integrator for shared contract impact
+- unit and contract tests for touched contracts
+- integration smoke for touched subsystem(s)
+- update docs/tasks if new constraints are discovered
 
 ## Main risks
-
-- shared contract drift
-- hidden dependency on unfinished neighboring work package
-- missing validation coverage
-- branch-specific behavior leakage into shared core
+- contract drift
+- insufficient validation
+- parallel work misalignment
 
 ## Handoff conditions
+- all required deliverables complete
+- no contract-breaking change left undocumented
+- ADRs added for any meaningful deviation
 
-- all touched documents updated
-- all task cards completed or explicitly split
-- handoff note written for each merged task
-- unresolved issues listed with owner and next step
-
-## Parallelization note
-
-No parallel implementation phases should begin before this phase is accepted.
+## May start in parallel with
+- WP_B
+- WP_C

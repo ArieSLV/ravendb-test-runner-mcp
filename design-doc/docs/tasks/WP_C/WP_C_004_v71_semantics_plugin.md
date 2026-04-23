@@ -1,76 +1,59 @@
-# WP_C_004
+# WP C 004 v71 semantics plugin
+
+## Task ID
+`WP_C_004_v71_semantics_plugin`
 
 ## Title
+Implement the v7.1 plugin, including transitional AI capabilities and xUnit v2-era behavior.
 
-Implement `RavenV71Semantics` plugin.
+## Purpose
+Deliver one bounded step of RavenDB Test Runner MCP Server without changing frozen architecture implicitly.
 
 ## Scope
-
-Deliver the focused implementation unit described by this task and only the directly required supporting updates.
+- implement the task-specific capability described by the title
+- update only the contracts/docs/modules required by this task
+- preserve the naming and build-subsystem invariants
 
 ## Out of scope
-
 - unrelated refactors
-- contract redesign beyond explicit required deltas
-- neighboring work package responsibilities
-- speculative optimizations
+- opportunistic architecture changes without ADR
+- undocumented contract drift
 
 ## Prerequisites
-
-- docs/contracts/VERSIONING_AND_CAPABILITIES.md
-- `AGENTS.md`
-- relevant phase brief and work package brief
+- Phase 0 contract freeze approved
 
 ## Touched modules/files
+- RavenDB.TestRunner.McpServer.Semantics.Abstractions
+- RavenDB.TestRunner.McpServer.Semantics.Raven.V62
+- RavenDB.TestRunner.McpServer.Semantics.Raven.V71
+- RavenDB.TestRunner.McpServer.Semantics.Raven.V72
 
-Primary modules:
-- src/RavenMcp.Semantics.Raven.V71
+## Inputs
+- docs/architecture/DECISION_FREEZE.md
+- docs/contracts/DOMAIN_MODEL.md
+- docs/contracts/VERSIONING_AND_CAPABILITIES.md
 
-Primary documents:
-- `docs/architecture/DECISION_FREEZE.md`
-- task-relevant contract files
-- this task card
-- `docs/tasks/TASK_INDEX.md` on completion
-
-Expected new or changed implementation files:
-- create or update the minimal file set required inside the listed modules
-- do not expand the touched surface without justification in handoff
+## Expected outputs
+- Implement the v7.1 plugin, including transitional AI capabilities and xUnit v2-era behavior.
+- updated handoff note
+- updated task status in TASK_INDEX.md if completed
 
 ## Implementation notes
-
-- Preserve frozen naming, ID, and capability rules.
-- If branch-specific behavior is required, route it through the semantic plugin/capability model.
-- Keep raw artifact handling aligned with the hybrid storage policy.
-- If the task affects external surfaces, update tests and schemas first or in the same change.
-- If contract impact is discovered, stop and document it explicitly.
+- Stay within the declared scope.
+- Escalate design changes through ADR / design delta if required.
 
 ## Validation steps
-
-- run focused unit/contract/integration tests relevant to this task
-- verify no contract mismatch with the referenced documents
-- update task status only after validation evidence exists
-- capture any generated artifacts or logs needed for handoff
+- workspace fixture tests for v6.2/v7.1/v7.2
+- capability matrix snapshot test
 
 ## Definition of done
-
-- the intended implementation output exists
-- referenced contracts are satisfied
-- validation has been executed or explicitly documented as blocked
-- handoff note is written using `docs/tasks/HANDOFF_TEMPLATE.md`
-- task status in `docs/tasks/TASK_INDEX.md` is updated by the integrator
+- the task output exists in the declared module(s)
+- the relevant contract references remain accurate
+- validation steps were executed or explicitly blocked with reasons
+- handoff note completed using `HANDOFF_TEMPLATE.md`
 
 ## Handoff expectations
-
-Include:
-- scope completed
-- touched modules/files
-- touched contracts or `No contract delta`
-- validation executed
-- open risks
-- suggested follow-up task if needed
-
-## Acceptance criteria
-
-- v7.1 catalog and capabilities produced
-- no unexplained architectural drift
-- work is merge-ready for the integrator
+- summarize exactly what changed
+- mention any contract/doc updates
+- mention risks and follow-ups
+- mention any ADR impact

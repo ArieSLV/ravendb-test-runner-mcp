@@ -1,83 +1,62 @@
-# WP A FOUNDATION AND CONTRACTS
+# WP_A — FOUNDATION AND CONTRACTS
 
 ## Objective
+Freeze product naming, module boundaries, shared contracts, event schemas, and solution layout for multi-agent implementation.
 
-Create the solution scaffold, shared abstractions, frozen DTO/contracts package, and task/ADR operating structure.
+## Engineering purpose
+This work package exists to deliver a bounded part of RavenDB Test Runner MCP Server without blurring responsibilities with adjacent work packages.
 
-## Business / engineering purpose
 
-This work package exists to make the system incrementally shippable while preserving frozen contracts and enabling parallel delivery.
 
 ## Exact scope
-
-- solution skeleton
-- shared contracts package
-- ID/naming conventions
-- event/state baseline
-- task system and handoff discipline
+- Create the solution scaffold and rename the implementation surface to the canonical product/module names.
+- Create the shared contracts/package layout and map each contract document to a target project/module.
+- Freeze document ID patterns, collection names, and module ownership tables.
+- Freeze the event envelope, ordering rules, cursors, and replay semantics across build and test subsystems.
+- Freeze build/run/attempt lifecycle state machines and optimistic concurrency expectations.
+- Create validation checklists and contract approval gates required before any production implementation starts.
 
 ## Out of scope
-
-- RavenDB bootstrap
-- real execution
-- UI implementation
+- changing frozen product decisions without ADR
+- opportunistic renaming outside the approved naming policy
+- hidden cross-cutting changes that are not reflected in contracts/tasks
 
 ## Dependencies
-
-- docs/architecture/DECISION_FREEZE.md
-- all contract files
+- none
 
 ## Touched documents
-
-- AGENTS.md
 - docs/contracts/*
-- docs/tasks/*
-- docs/adr/*
+- docs/phases/*
+- docs/tasks/WP_A/*
 
-## Touched projects/modules
-
-- RavenMcp.Core.Abstractions
-- RavenMcp.Domain
-- RavenMcp.Shared.Contracts
-
-## Sub-deliverables
-
-- implementation modules for this work package
-- updated tests
-- updated task statuses
-- handoff notes
-- contract or ADR updates if necessary
+## Touched modules
+- RavenDB.TestRunner.McpServer.Core.Abstractions
+- RavenDB.TestRunner.McpServer.Domain
+- RavenDB.TestRunner.McpServer.Shared.Contracts
 
 ## Detailed TODO checkpoints
-
-- Create solution/project layout and naming baseline.
-- Create shared contracts package and reference graph.
-- Freeze document ID conventions and entity names.
-- Freeze event envelope and core state machines.
-- Create tasking, handoff, and ADR operational structure.
+- [1] 001 solution scaffold and name freeze
+- [2] 002 shared contracts project layout
+- [3] 003 document id and collection conventions
+- [4] 004 event contract baseline
+- [5] 005 state machine baseline
+- [6] 006 phase0 validation harness
 
 ## Acceptance criteria
-
-- all listed checkpoints are satisfied
-- required tests for this package pass
-- no undocumented contract drift exists
-- artifacts and outputs can be handed to the next package cleanly
+- all task cards in this work package are completed or explicitly deferred by ADR
+- contract tests for the affected area pass
+- handoff notes are recorded for integrator review
+- no undocumented drift remains between architecture docs and implementation-facing docs
 
 ## Required tests
-
-- schema/serialization tests
-- dependency graph lint or review
-- documentation completeness checks
+- unit tests
+- contract tests
+- integration smoke tests
 
 ## Merge / handoff instructions
-
-- merge only after passing the required tests
-- update `docs/tasks/TASK_INDEX.md`
-- include a handoff note using `docs/tasks/HANDOFF_TEMPLATE.md`
-- call out all touched contracts explicitly
-- note any deferred follow-up task
+- merge only after updating any changed contract references
+- include a short handoff note using `docs/tasks/HANDOFF_TEMPLATE.md`
+- flag any uncovered risk explicitly for integrator review
 
 ## Likely ADR touchpoints
-
-- ADR_0001
-- ADR_0004
+- ADR_0001_PRODUCT_NAMING_AND_MODULE_POLICY

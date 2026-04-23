@@ -1,560 +1,347 @@
-# Domain Model Contract
+# DOMAIN_MODEL.md
 
 ## Purpose
-
-Define the authoritative entity model used by:
-- the shared orchestration core,
-- RavenDB Embedded persistence,
-- MCP responses,
-- browser APIs,
-- event payloads,
-- flaky analytics.
+Define the stable domain entities for builds, tests, runs, attempts, artifacts, and compatibility state.
 
 ## Scope
+This file is normative for the bounded area described below. If implementation notes elsewhere conflict with this file, this file wins unless an ADR explicitly supersedes it.
 
-This contract defines:
-- entities,
-- identities,
-- required fields,
-- optional fields,
-- invariants,
-- authoritative ownership.
 
-This file is authoritative for entity names and field semantics.
-Persistence-specific details belong to `STORAGE_MODEL.md`.
-Transport-specific field selection belongs to `MCP_TOOLS.md` and `WEB_API.md`.
+## Scope boundaries
+This model covers:
+- workspace and semantic snapshots,
+- build subsystem entities,
+- test catalog entities,
+- run/attempt entities,
+- flaky-analysis entities,
+- shared envelopes used by MCP and browser-facing surfaces.
 
-## Shared identity rules
+## Naming invariant
+All examples and type names are expressed for RavenDB Test Runner MCP Server. Internal implementation namespaces SHOULD follow `RavenDB.TestRunner.McpServer`.
 
-### Workspace identity
-
-Canonical key:
-- `workspaceId`
-
-Derived from:
-- normalized root path
-- repository line
-- current repository fingerprint scope
-
-Invariant:
-- one logical workspace root maps to one active workspace identity at a time.
-
-### Test identity
-
-Canonical stable identity:
-- `testId`
-- `projectId`
-- `assemblyName`
-- `targetFramework`
-- `fullyQualifiedName`
-
-Optional enrichment:
-- `xunitUniqueId`
-- `displayName`
-- `sourceFilePath`
-- `sourceLineNumber`
-
-Invariant:
-- `fullyQualifiedName` alone is not sufficient as the only stable identity key.
-
-### Run identity
-
-Canonical key:
-- `runId`
-
-Invariant:
-- a run may contain multiple project steps
-- a run may contain zero or more attempts
-- run IDs are immutable
-
-### Attempt identity
-
-Canonical key:
-- `runId` + `attemptIndex`
-
-Invariant:
-- attempt indexes are 1-based for iterative runs
-- non-iterative runs MAY use implicit attempt index `0` in result models
-
-## Entities
-
+## Workspace entities
 ### WorkspaceSnapshot
-
-Purpose:
-- describe the currently analyzed workspace and its detected repository line
-
-Required fields:
+Fields:
 - `workspaceId`
 - `rootPath`
-- `repoLine`
-- `gitSha`
 - `branchName`
+- `gitSha`
+- `repoLine`
 - `sdkVersion`
-- `runnerFamily`
-- `frameworkFamily`
+- `dirtyFingerprint`
 - `semanticPluginId`
+- `capabilityMatrixId`
+- `createdAtUtc`
+
+### SemanticSnapshot
+Fields:
+- `semanticSnapshotId`
+- `workspaceId`
+- `pluginId`
+- `categoryCatalogVersion`
+- `customAttributeRegistryVersion`
+- `topologyHash`
 - `supportsAiEmbeddingsSemantics`
 - `supportsAiConnectionStrings`
 - `supportsAiAgentsSemantics`
 - `supportsAiTestAttributes`
-- `supportsSlowTestsIssues`
-- `analyzedAtUtc`
 
-Optional fields:
-- `solutionPath`
-- `globalJsonPath`
-- `notes[]`
-
-Invariants:
-- `repoLine` is one of `v6.2`, `v7.1`, `v7.2`, `unsupported`
-- capability fields are explicit booleans, not inferred ad hoc at call sites
-
-### SemanticSnapshot
-
-Purpose:
-- store the analyzed semantic model derived from repository code and configs
-
-Required fields:
-- `semanticSnapshotId`
-- `workspaceId`
-- `pluginId`
-- `snapshotVersion`
-- `categoryCatalogVersion`
-- `attributeRegistryVersion`
-- `projectTopologyVersion`
-- `createdAtUtc`
-
-Optional fields:
-- `compileSymbolHooks[]`
-- `warnings[]`
-- `versionSensitiveNotes[]`
-
-Invariant:
-- a semantic snapshot is immutable once published
-
-### CompatibilityMatrix
-
-Purpose:
-- record capability decisions for the current workspace line and toolchain
-
-Required fields:
-- `compatibilityMatrixId`
+### CapabilityMatrix
+Fields:
+- `capabilityMatrixId`
 - `workspaceId`
 - `repoLine`
-- `sdkVersion`
-- `runnerFamily`
 - `frameworkFamily`
-- `adapterPackageVersion`
-- `knownCapabilities`
-- `versionSensitivePoints[]`
-- `generatedAtUtc`
+- `runnerFamily`
+- `adapterFamily`
+- `capabilities` (dictionary)
+- `versionSensitivePoints`
 
+## Build subsystem entities
+### BuildScope
+Describes what is being built.
+Fields:
+- `kind` (`solution`, `project`, `projects`, `directory`)
+- `paths`
+- `configuration`
+- `targetFrameworks`
+- `runtimeIdentifiers`
+- `buildProperties`
+
+### BuildPolicy
+Fields:
+- `mode` (`require_existing_ready_build`, `build_if_missing_or_stale`, `force_incremental_build`, `force_rebuild`, `expert_skip_build`)
+- `allowImplicitRestore`
+- `captureBinlog`
+- `captureCompactArtifactsAsAttachments`
+- `thresholdBytes`
+- `cleanBeforeBuild`
+- `reuseExistingReadiness`
+
+### BuildFingerprint
+Fields:
+- `fingerprintId`
+- `workspaceId`
+- `repoLine`
+- `gitSha`
+- `dirtyFingerprint`
+- `sdkVersion`
+- `scopeHash`
+- `configuration`
+- `propertyHash`
+- `relevantEnvHash`
+- `dependencyInputsHash`
+- `outputManifestHash`
+
+### BuildReadinessToken
+Fields:
+- `readinessTokenId`
+- `buildId`
+- `workspaceId`
+- `fingerprintId`
+- `scopeHash`
+- `configuration`
+- `createdAtUtc`
+- `expiresAtUtc` (optional)
+- `status` (`ready`, `superseded`, `invalidated`, `missing_outputs`)
+
+### BuildRequest
+Fields:
+- `buildRequestId`
+- `workspaceId`
+- `scope`
+- `policy`
+- `requestedBy`
+- `reason`
+- `clientRequestId`
+
+### BuildPlan
+Fields:
+- `buildPlanId`
+- `workspaceId`
+- `scope`
+- `policy`
+- `reuseDecision`
+- `steps`
+- `expectedArtifacts`
+- `resultsDirectory`
+- `createdAtUtc`
+
+### BuildExecution
+Fields:
+- `buildId`
+- `buildPlanId`
+- `workspaceId`
+- `state`
+- `phase`
+- `currentStepIndex`
+- `startedAtUtc`
+- `endedAtUtc`
+- `buildFingerprintId`
+- `readinessTokenId`
+- `canCancel`
+
+### BuildResult
+Fields:
+- `buildId`
+- `status` (`succeeded`, `failed`, `cancelled`, `timed_out`, `reused`, `invalid`)
+- `failureClassification`
+- `outputsManifest`
+- `artifacts`
+- `reproCommand`
+- `reuseDecision`
+- `warnings`
+
+### BuildReuseDecision
+Fields:
+- `decision` (`reused_existing`, `rebuilt_stale`, `rebuilt_missing`, `rebuilt_forced`, `rejected_existing`, `skipped_by_policy`)
+- `reasonCodes`
+- `existingBuildId`
+- `newBuildRequired`
+
+## Test catalog entities
 ### TestProject
-
-Required fields:
+Fields:
 - `projectId`
 - `name`
 - `path`
-- `role`
-- `targetFrameworks[]`
 - `assemblyName`
-- `isRunnable`
-- `references[]`
-
-Role enum:
-- `test`
-- `infrastructure`
-- `support`
+- `targetFrameworks`
+- `projectOutputStyle`
 
 ### TestAssembly
-
-Required fields:
+Fields:
 - `assemblyId`
 - `projectId`
 - `assemblyName`
 - `targetFramework`
-- `outputStyle`
-- `runnerConfigFiles[]`
-
-OutputStyle enum:
-- `library-style`
-- `exe-style`
+- `outputPathPattern`
 
 ### TestCategory
-
-Required fields:
+Fields:
 - `categoryKey`
 - `traitKey`
 - `traitValue`
-- `aliases[]`
-
-Optional fields:
-- `implies[]`
-- `introducedInRepoLine`
-- `deprecatedInRepoLine`
-
-Invariant:
-- canonical matching uses `traitKey` + `traitValue`
+- `aliases`
+- `implies`
+- `repoLineSupport`
 
 ### TestRequirement
-
-Required fields:
+Fields:
 - `kind`
 - `declaredBy`
-- `runtimeSensitive`
-- `confidenceClass`
-
-Kind enum:
-- `license`
-- `nightly`
-- `service`
-- `cloud`
-- `ai`
-- `platform`
-- `architecture`
-- `intrinsics`
-- `integration_toggle`
-- `retry`
-- `other`
+- `environmentKeys`
+- `runtimeOnly`
+- `confidence`
 
 ### TestIdentity
-
-Required fields:
+Fields:
 - `testId`
 - `projectId`
-- `assemblyName`
-- `targetFramework`
+- `assemblyId`
 - `fullyQualifiedName`
 - `classFqn`
 - `methodName`
 - `selectorStabilityLevel`
+- `xunitUniqueId` (optional)
+- `sourceFilePath` (optional)
+- `sourceLineNumber` (optional)
 
-Optional fields:
-- `displayName`
-- `xunitUniqueId`
-- `sourceFilePath`
-- `sourceLineNumber`
-
-SelectorStabilityLevel enum:
-- `method-stable`
-- `class-stable`
-- `set-stable`
-- `runtime-row`
-- `unknown`
-
-### EnvironmentProfile
-
-Required fields:
-- `environmentProfileId`
-- `name`
-- `inheritMode`
-- `set`
-- `unset[]`
-- `repoSpecificFlags`
-- `redactionRulesVersion`
-
-InheritMode enum:
-- `filtered`
-- `empty`
-
+## Run entities
 ### RunRequest
-
-Required fields:
+Fields:
+- `runRequestId`
+- `workspaceId`
 - `selector`
 - `executionProfile`
-- `requestOrigin`
-- `requestedAtUtc`
-
-Optional fields:
+- `buildPolicy`
+- `buildReadinessTokenId` (optional)
 - `clientRequestId`
-- `rawExpertFilter`
-- `notes[]`
 
 ### RunPlan
-
-Required fields:
-- `planId`
+Fields:
+- `runPlanId`
 - `workspaceId`
-- `repoLine`
-- `semanticPluginId`
-- `runnerFamily`
-- `frameworkFamily`
-- `configuration`
-- `steps[]`
-- `predictedSelection`
-- `predictedSkips[]`
-- `generatedAtUtc`
-
-### RunStep
-
-Required fields:
-- `stepIndex`
-- `projectId`
-- `cwd`
-- `argv[]`
-- `resultsDirectory`
-- `environmentProfileId`
-
-Optional fields:
-- `dotnetFilter`
-- `runSettingsPath`
-- `artifactPolicy`
-- `diagnosticsMode`
+- `selector`
+- `executionProfile`
+- `buildDecision`
+- `linkedBuildId` (optional)
+- `linkedReadinessTokenId` (optional)
+- `steps`
+- `predictedSkips`
 
 ### RunExecution
-
-Required fields:
+Fields:
 - `runId`
-- `planId`
+- `runPlanId`
+- `workspaceId`
 - `state`
 - `phase`
 - `currentStepIndex`
-- `stepCount`
 - `startedAtUtc`
-
-Optional fields:
-- `completedAtUtc`
-- `cancellationRequestedAtUtc`
-- `failureClassification`
-- `activePid`
-
-### RunArtifact
-
-Required fields:
-- `artifactId`
-- `runId`
-- `artifactKind`
-- `storageKind`
-- `contentType`
-- `sizeBytes`
-- `sha256`
-- `retentionClass`
-
-Optional fields:
-- `attemptIndex`
-- `stepIndex`
-- `filesystemPath`
-- `attachmentDocumentId`
-- `attachmentName`
-- `previewExcerpt`
-- `sensitive`
-
-ArtifactKind enum:
-- `plan`
-- `command`
-- `env`
-- `console`
-- `stdout`
-- `stderr`
-- `trx`
-- `junit`
-- `diag`
-- `blame`
-- `normalized`
-- `repro`
-- `compare`
-- `other`
-
-StorageKind enum:
-- `filesystem`
-- `ravendb-attachment`
-- `ravendb-document`
-
-### SkipPrediction
-
-Required fields:
-- `testId`
-- `reasonCode`
-- `confidence`
-- `requiresRuntimeValidation`
-- `message`
-
-### FailureClassification
-
-Required fields:
-- `kind`
-- `scope`
-- `phase`
-- `retriable`
-- `userFacingSummary`
-
-Kind enum:
-- `workspace_invalid`
-- `unsupported_repo_shape`
-- `toolchain_unavailable`
-- `restore_error`
-- `build_error`
-- `discovery_error`
-- `adapter_error`
-- `no_tests_matched`
-- `all_selected_tests_skipped`
-- `test_failures`
-- `host_crashed`
-- `hung`
-- `cancelled`
-- `timed_out`
-- `artifact_parse_failed`
-- `inconsistent_result_set`
-
-### NormalizedTestResult
-
-Required fields:
-- `testId`
-- `runId`
-- `status`
-- `durationMs`
-- `declaredRequirements[]`
-- `attemptIndex`
-- `evidenceSources[]`
-
-Optional fields:
-- `skipReason`
-- `failureMessage`
-- `stackTrace`
-- `displayName`
-- `failureSignatureHash`
+- `endedAtUtc`
+- `linkedBuildId`
+- `linkedReadinessTokenId`
 
 ### RunResult
-
-Required fields:
+Fields:
 - `runId`
 - `status`
 - `summary`
 - `failureClassification`
-- `normalizationPrecision`
-- `generatedAtUtc`
+- `artifacts`
+- `buildDecision`
+- `buildReuseDecision`
+- `normalizedTests`
 
-Optional fields:
-- `predictedVsActual`
-- `attemptSummary`
-- `compatNotes[]`
-
+## Iterative/flaky entities
 ### FlakyPolicy
-
-Required fields:
+Fields:
 - `mode`
 - `maxAttempts`
 - `overallBudgetMs`
 - `perAttemptTimeoutMs`
-- `freezeEnvironment`
-
-Optional fields:
-- `passThreshold`
-- `failureThreshold`
 - `escalateDiagnosticsAfterFailures`
 - `fallbackToSequentialAfterInconsistency`
-- `quarantineOnConfidenceAtOrAbove`
+- `freezeEnvironment`
+- `allowQuarantineAction`
 
 ### IterativeRunRequest
-
-Required fields:
+Fields:
+- `iterativeRunId`
+- `workspaceId`
 - `selector`
-- `baseExecutionProfile`
+- `executionProfile`
+- `buildPolicy`
 - `flakyPolicy`
 
-Optional fields:
-- `comparisonMode`
-- `notes[]`
-
 ### AttemptPlan
-
-Required fields:
-- `runId`
+Fields:
 - `attemptIndex`
-- `effectiveExecutionProfile`
-- `derivedFrom`
-- `commandSteps[]`
+- `linkedRunPlanId`
+- `effectiveProfile`
+- `linkedBuildId`
+- `linkedReadinessTokenId`
+- `diagnosticEscalationLevel`
 
 ### AttemptResult
-
-Required fields:
-- `runId`
+Fields:
 - `attemptIndex`
 - `status`
-- `summary`
 - `durationMs`
-- `generatedAtUtc`
-
-Optional fields:
-- `failureClassification`
-- `signatureHashes[]`
+- `failureSignatureHash`
+- `artifacts`
+- `buildContext`
 
 ### StabilitySignal
-
-Required fields:
-- `signalKind`
+Fields:
+- `kind`
 - `confidence`
-- `evidenceRefs[]`
-
-SignalKind enum:
-- `outcome_oscillation`
-- `duration_spike`
-- `failure_signature_drift`
-- `parallelism_sensitivity`
-- `environment_sensitivity`
-- `selector_instability`
-- `host_instability`
-- `deterministic_skip`
-- `deterministic_failure`
-- `other`
+- `evidenceRefs`
 
 ### FlakyClassification
-
-Required fields:
-- `classification`
+Fields:
+- `kind`
 - `score`
-- `reasonCodes[]`
+- `reasonCodes`
+- `automatable`
 
-Classification enum:
-- `suspected_flaky`
-- `likely_flaky`
-- `confirmed_flaky`
-- `likely_infra_issue`
-- `likely_environment_issue`
-- `inconclusive`
-- `not_flaky`
-
-### HistoricalOutcomeRollup
-
-Required fields:
+### QuarantineAction
+Fields:
+- `quarantineActionId`
 - `testId`
-- `window`
-- `passRate`
-- `failureRate`
-- `skipRate`
-- `distinctFailureSignatures`
-- `profilesSeen[]`
-- `updatedAtUtc`
+- `classification`
+- `policySource`
+- `state` (`proposed`, `approved`, `applied`, `reverted`, `rejected`)
+- `auditRefs`
 
-### QuarantineDecision
+## Shared envelopes
+### ArtifactRef
+Fields:
+- `artifactId`
+- `kind`
+- `storageKind` (`filesystem`, `raven_attachment`)
+- `pathOrAttachmentKey`
+- `sizeBytes`
+- `sha256`
+- `sensitive`
 
-Required fields:
-- `testId`
-- `decision`
-- `confidence`
-- `reasonCodes[]`
-- `createdAtUtc`
-- `reversible`
+### FailureClassification
+Fields:
+- `kind`
+- `scope`
+- `phase`
+- `retriable`
+- `suggestedAction`
 
-Decision enum:
-- `proposed`
-- `accepted`
-- `rejected`
-- `revoked`
-
-## Cross-entity invariants
-
-- Every `RunExecution` references a valid `RunPlan`.
-- Every `RunArtifact` references a valid `runId`.
-- Every `AttemptResult` belongs to exactly one `runId`.
-- Every `NormalizedTestResult` must map to a `TestIdentity`.
-- `FailureClassification.kind = no_tests_matched` and `all_selected_tests_skipped` are mutually exclusive.
-- Deterministic skip reasons must not be promoted to flaky classification without explicit override and evidence.
+## Invariants
+1. Build IDs and run IDs are distinct lifecycles.
+2. A run MAY reference a build, but a build MUST NOT be hidden inside a run without persistence.
+3. Build reuse MUST always produce an explicit `BuildReuseDecision`.
+4. Raw filters MUST NOT be canonical internal identity.
+5. Deterministic skips MUST NOT be classified as flaky.
 
 ## Validation requirements
-
-- DTO/schema contract tests
-- serialization compatibility tests
-- identity stability tests
-- run/attempt linkage tests
-- deterministic-skip-not-flaky tests
+- Domain contract tests MUST serialize/deserialize all major entities.
+- Identity rules MUST be stable across process restarts.
+- Build-to-run references MUST remain valid after restart and reconnect.

@@ -1,46 +1,20 @@
-# Parallelization Strategy
+# PARALLELIZATION_STRATEGY.md
 
-## Objective
+## Rule
+No parallel coding starts before Phase 0 contract freeze is approved.
 
-Enable multiple AI coding agents to work concurrently without destabilizing the architecture.
+## Safe parallel lanes after Phase 0
+- Lane 1: `WP_B` Storage and Registry
+- Lane 2: `WP_C` Semantics
+- Lane 3: `WP_A` residual contract cleanups and validation harness
 
-## Rule set
+## Safe parallel lanes after storage + semantics stabilise
+- Lane 4: `WP_D` Build Subsystem
+- Lane 5: `WP_G` MCP host shell scaffolding (without final tool binding)
+- Lane 6: `WP_H` API skeleton and event stream shells
 
-- Phase 0 is serialized.
-- Shared contracts are frozen before broad parallel implementation.
-- Each work package has an owner.
-- One integrator controls merges into shared contracts and shared abstractions.
-
-## Recommended parallel lanes
-
-### Lane 1
-- WP-B Storage and Registry
-
-### Lane 2
-- WP-C Semantics and Catalog
-
-### Lane 3
-- WP-F MCP Surface skeleton
-
-After event/API contracts stabilize:
-
-### Lane 4
-- WP-G Web API and Streams
-
-### Lane 5
-- WP-H Frontend
-
-After run/result/attempt models stabilize:
-
-### Lane 6
-- WP-I Flaky Analytics
-
-## Forbidden parallel changes without integrator review
-
-- document ID patterns
-- collection names
-- event names or payload fields
-- run state enum changes
-- MCP request/response shape changes
-- browser API shape changes
-- capability names
+## Later parallelization
+- `WP_E` and `WP_F` can overlap once Build and Storage exist
+- `WP_I` frontend shells can start once API/event contracts are frozen
+- `WP_J` can start once result/attempt/build contracts are stable
+- `WP_K` runs continuously but finalizes last

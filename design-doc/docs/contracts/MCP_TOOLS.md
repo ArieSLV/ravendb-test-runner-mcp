@@ -1,362 +1,131 @@
-# MCP Tools Contract
+# MCP_TOOLS.md
 
 ## Purpose
+Define authoritative MCP tool families for build and test orchestration in RavenDB Test Runner MCP Server.
 
-Define the authoritative MCP tool surface.
+## Scope
+This file is normative for the MCP surface. If implementation notes elsewhere conflict with this file, this file wins unless an ADR explicitly supersedes it.
 
-## MCP host model
+## Surface overview
+The MCP surface is split into first-class build and test tool families.
 
-The system has two MCP entry points:
-- primary local Streamable HTTP host
-- optional stdio bridge host
+## Host topology
+### Streamable HTTP host
+- primary MCP host
+- long-lived, independent process model
+- local-first localhost posture
+- SHOULD support resumability-friendly behavior for event streams where practical
 
-Both hosts expose the same tool contracts over the shared orchestration core.
+### stdio bridge host
+- compatibility host only
+- thin bridge into the shared orchestration core
+- MUST keep `stdout` protocol-clean
+- MAY log to `stderr`
 
-## Tool design principles
+## build.* tools
+### `build.graph.analyze`
+Purpose: analyze solution/project graph and normalized build scope.
 
-- tools are strongly typed
-- progress is explicit for long-running operations
-- cancellation is supported where applicable
-- request/response payloads include version/capability context where needed
-- raw filters are expert-mode only
+Request shape includes:
+- workspace path or workspace ID
+- build scope
+- configuration
+- optional property overrides
 
-## Common envelope fields
+Response includes:
+- normalized scope
+- graph summary
+- capability notes
+- build-scope warnings
 
-Responses SHOULD include:
-- `workspaceId`
-- `repoLine`
-- `semanticPluginId`
-- `runnerFamily`
-- `frameworkFamily`
-- `warnings[]`
-- `versionSensitiveNotes[]`
+### `build.plan`
+Purpose: generate a deterministic build plan and explicit reuse decision.
 
-## Tool list
-
-### `tests.projects.list`
-
-Purpose:
-- list test topology and supported test projects
-
-Request:
-- `workspacePath`
-
-Response:
-- workspace summary
-- projects
-- runnable test assemblies
-- repo line/capabilities
-
-Idempotent:
-- yes
-
-### `tests.categories.list`
-
-Purpose:
-- list canonical categories, aliases, and trait values
-
-Request:
-- `workspacePath`
-
-Response:
-- category catalog
-
-Idempotent:
-- yes
-
-### `tests.capabilities`
-
-Purpose:
-- expose version/capability envelope
-
-Request:
-- `workspacePath`
-
-Response:
-- repo line
-- plugin
-- capability matrix
-
-Idempotent:
-- yes
-
-### `tests.discover`
-
-Purpose:
-- discover tests under a selector
-
-Request:
-- `workspacePath`
-- `selector`
-- `mode`: `static|runtime|hybrid`
-
-Response:
-- matching tests
-- stability level
-- requirements
-- categories
-
-Idempotent:
-- yes
-
-### `tests.preflight`
-
-Purpose:
-- perform non-executing readiness and skip prediction
-
-Request:
-- `workspacePath`
-- `selector`
-- `executionProfile`
-
-Response:
-- toolchain status
-- compatibility warnings
-- predicted skips
-- runtime-unknowns
-
-Idempotent:
-- yes
-
-### `tests.plan`
-
-Purpose:
-- produce deterministic run plan without executing it
-
-Request:
-- `workspacePath`
-- `selector`
-- `executionProfile`
-
-Response:
-- `RunPlan`
-- explanation
+Response includes:
+- `BuildPlan`
+- `BuildReuseDecision`
 - predicted artifacts
-- repro command preview
+- build repro command preview
 
-Idempotent:
-- yes
+### `build.run`
+Purpose: execute a build under explicit `BuildPolicy`.
 
-### `tests.run`
+Response includes:
+- `buildId`
+- `buildPlanId`
+- progress token / stream handle
+- `canCancel`
 
-Purpose:
-- start a run
+### `build.status`
+Purpose: fetch build lifecycle status and partial summary.
 
-Request:
-- `workspacePath`
-- `selector`
-- `executionProfile`
-- optional `clientRequestId`
+### `build.output_tail`
+Purpose: fetch or stream build stdout/stderr/merged output by cursor.
 
-Response:
-- `runId`
-- `planId`
-- initial state
-- progress token
+### `build.results`
+Purpose: fetch final or partial build result, artifacts, readiness token, and reuse decision.
 
-Idempotent:
-- conditionally, when `clientRequestId` is used
+### `build.cancel`
+Purpose: cancel an active build.
 
-Long-running:
-- yes
+### `build.repro_command`
+Purpose: return exact shell repro commands for the selected build.
 
-Cancelable:
-- yes
+### `build.clean`
+Purpose: execute explicit clean/invalidation workflow.
 
-### `tests.run_status`
+### `build.readiness`
+Purpose: inspect readiness tokens and whether a future test run can reuse them.
 
-Purpose:
-- current state for a run
+## tests.* tools
+### Discovery and planning
+- `tests.projects.list`
+- `tests.categories.list`
+- `tests.discover`
+- `tests.preflight`
+- `tests.plan`
+- `tests.capabilities`
 
-Request:
-- `runId`
+### Execution and output
+- `tests.run`
+- `tests.run_status`
+- `tests.run_output_tail`
+- `tests.run_results`
+- `tests.cancel`
+- `tests.rerun_failed`
+- `tests.repro_command`
 
-Response:
-- run lifecycle state
-- phase
-- step position
-- summary so far
-- active attempt if any
+### Explainability and flaky tools
+- `tests.explain_filter`
+- `tests.explain_skip`
+- `tests.iterative_run`
+- `tests.flaky_analyze`
+- `tests.flaky_history`
+- `tests.compare_attempts`
+- `tests.stability_report`
+- `tests.quarantine_candidates`
 
-Idempotent:
-- yes
+## Build/test relationship contract
+`tests.run` MUST NOT silently rebuild ad hoc. It MUST either:
+1. reference a supplied build readiness token,
+2. invoke the build subsystem under explicit build policy,
+3. fail because policy forbids implicit build creation.
 
-### `tests.run_output_tail`
-
-Purpose:
-- tail merged/stdout/stderr logs by cursor
-
-Request:
-- `runId`
-- `stream`
-- `afterCursor`
-- `maxLines`
-
-Response:
-- lines
-- next cursor
-- truncation flag
-
-Idempotent:
-- yes
-
-### `tests.run_results`
-
-Purpose:
-- read normalized run results and artifacts
-
-Request:
-- `runId`
-- paging options
-- include artifacts?
-- include tests?
-- include attempts?
-
-Response:
-- `RunResult`
-- `NormalizedTestResult[]`
-- `RunArtifact[]`
-
-Idempotent:
-- yes
-
-### `tests.cancel`
-
-Purpose:
-- cancel an active run
-
-Request:
-- `runId`
-- `reason`
-
-Response:
-- accepted?
-- current state
-
-Idempotent:
-- yes
-
-### `tests.rerun_failed`
-
-Purpose:
-- start a rerun for failed tests from a prior run
-
-Request:
-- `sourceRunId`
-- mode: `plan|start`
-
-Response:
-- rerun plan or run id
-- coarsening warnings if any
-
-Idempotent:
-- no, unless guarded by client request id
-
-### `tests.iterative_run`
-
-Purpose:
-- execute repeated or policy-driven reruns for flaky analysis
-
-Request:
-- `workspacePath`
-- `selector`
-- `executionProfile`
-- `flakyPolicy`
-
-Response:
-- `runId`
-- policy summary
-- progress token
-
-Long-running:
-- yes
-
-Cancelable:
-- yes
-
-### `tests.flaky_analyze`
-
-Purpose:
-- analyze a completed run or historical record for flaky classification
-
-Request:
-- `runId` or selector + window
-
-Response:
-- `FlakyClassification`
-- `StabilitySignal[]`
-- mitigation suggestions
-
-### `tests.flaky_history`
-
-Purpose:
-- retrieve historical outcome rollups for a selector
-
-Request:
-- `workspacePath`
-- `selector`
-- `window`
-
-Response:
-- `HistoricalOutcomeRollup[]`
-
-### `tests.compare_attempts`
-
-Purpose:
-- compare attempt-level outcomes and signatures
-
-Request:
-- `runId`
-- attempts[]
-
-Response:
-- attempt comparison view
-- signal deltas
-- classification hints
-
-### `tests.stability_report`
-
-Purpose:
-- summarize stability metrics for a selector or category
-
-### `tests.quarantine_candidates`
-
-Purpose:
-- list proposed or candidate quarantines
-
-### `tests.explain_filter`
-
-Purpose:
-- show normalized selector / dotnet filter mapping
-
-### `tests.explain_skip`
-
-Purpose:
-- show deterministic or runtime-sensitive skip reasoning
-
-### `tests.repro_command`
-
-Purpose:
-- return reproducible command(s) and environment summary
-
-## Expert mode filter rule
-
-If `rawExpertFilter` is accepted:
-- it must be explicit in the request
-- it must be stored as non-canonical input
-- the server must still emit normalized internal selector representation where possible
+The MCP payload for test planning and execution MUST surface:
+- effective build policy
+- linked build ID when applicable
+- linked readiness token when applicable
+- build reuse decision when applicable
 
 ## Progress and cancellation
-
-Long-running tools MUST:
-- expose progress token or equivalent
-- emit progress updates
-- honor cancellation through the shared cancellation model
+Long-running build and test tools MUST expose:
+- progress updates
+- explicit cancellation support
+- stable status polling shapes
+- partial result visibility where practical
 
 ## Validation requirements
-
-- schema tests for all tools
-- progress behavior tests
-- cancellation tests
-- idempotency tests where applicable
-- expert-mode filter validation tests
+- contract tests for all request/response shapes
+- parity tests between Streamable HTTP and stdio bridge behavior
+- progress/cancellation tests for `build.run`, `tests.run`, and `tests.iterative_run`
+- regression tests for build visibility in the tests surface

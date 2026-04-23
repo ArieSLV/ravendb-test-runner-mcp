@@ -1,83 +1,63 @@
-# WP C SEMANTICS V62 V71 V72
+# WP_C — SEMANTICS V62 V71 V72
 
 ## Objective
+Implement branch-aware semantics plugins, test catalog building, capability routing, and repo-line discovery.
 
-Implement repository line detection, semantic plugin routing, capability inference, and test catalog construction.
+## Engineering purpose
+This work package exists to deliver a bounded part of RavenDB Test Runner MCP Server without blurring responsibilities with adjacent work packages.
 
-## Business / engineering purpose
 
-This work package exists to make the system incrementally shippable while preserving frozen contracts and enabling parallel delivery.
 
 ## Exact scope
-
-- workspace detection
-- capability matrix
-- plugin interfaces
-- v62 plugin
-- v71 plugin
-- v72 plugin
-- test catalog
+- Implement workspace detection, branch line routing, and capability discovery for v6.2, v7.1, and v7.2.
+- Create semantic plugin interfaces and shared capability routing abstractions.
+- Implement the v6.2 plugin, including xUnit v2 assumptions and no-AI capability baseline.
+- Implement the v7.1 plugin, including transitional AI capabilities and xUnit v2-era behavior.
+- Implement the v7.2 plugin, including xUnit v3-era capabilities and modern test topology.
+- Persist semantic snapshots, category catalogs, and compatibility matrices in RavenDB Embedded.
 
 ## Out of scope
-
-- execution runtime
-- browser pages
+- changing frozen product decisions without ADR
+- opportunistic renaming outside the approved naming policy
+- hidden cross-cutting changes that are not reflected in contracts/tasks
 
 ## Dependencies
-
-- WP_A complete
-- WP_B storage basics available
+- WP_A
 
 ## Touched documents
+- docs/contracts/*
+- docs/phases/*
+- docs/tasks/WP_C/*
 
-- DOMAIN_MODEL.md
-- VERSIONING_AND_CAPABILITIES.md
-
-## Touched projects/modules
-
-- RavenMcp.Semantics.Abstractions
-- RavenMcp.Semantics.Raven.V62
-- RavenMcp.Semantics.Raven.V71
-- RavenMcp.Semantics.Raven.V72
-
-## Sub-deliverables
-
-- implementation modules for this work package
-- updated tests
-- updated task statuses
-- handoff notes
-- contract or ADR updates if necessary
+## Touched modules
+- RavenDB.TestRunner.McpServer.Semantics.Abstractions
+- RavenDB.TestRunner.McpServer.Semantics.Raven.V62
+- RavenDB.TestRunner.McpServer.Semantics.Raven.V71
+- RavenDB.TestRunner.McpServer.Semantics.Raven.V72
 
 ## Detailed TODO checkpoints
-
-- Implement workspace/repo-line detection pipeline.
-- Implement semantic plugin interface and router.
-- Implement `RavenV62Semantics`.
-- Implement `RavenV71Semantics`.
-- Implement `RavenV72Semantics` and capability matrix generation.
+- [1] 001 workspace and repo line detection
+- [2] 002 semantic plugin contracts
+- [3] 003 v62 semantics plugin
+- [4] 004 v71 semantics plugin
+- [5] 005 v72 semantics plugin
+- [6] 006 catalog persistence and capability matrix
 
 ## Acceptance criteria
-
-- all listed checkpoints are satisfied
-- required tests for this package pass
-- no undocumented contract drift exists
-- artifacts and outputs can be handed to the next package cleanly
+- all task cards in this work package are completed or explicitly deferred by ADR
+- contract tests for the affected area pass
+- handoff notes are recorded for integrator review
+- no undocumented drift remains between architecture docs and implementation-facing docs
 
 ## Required tests
-
-- repo-line detection tests
-- plugin routing tests
-- capability matrix tests
-- catalog tests
+- unit tests
+- contract tests
+- integration smoke tests
 
 ## Merge / handoff instructions
-
-- merge only after passing the required tests
-- update `docs/tasks/TASK_INDEX.md`
-- include a handoff note using `docs/tasks/HANDOFF_TEMPLATE.md`
-- call out all touched contracts explicitly
-- note any deferred follow-up task
+- merge only after updating any changed contract references
+- include a short handoff note using `docs/tasks/HANDOFF_TEMPLATE.md`
+- flag any uncovered risk explicitly for integrator review
 
 ## Likely ADR touchpoints
-
-- ADR_0004
+- none expected unless scope changes

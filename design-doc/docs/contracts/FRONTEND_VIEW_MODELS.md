@@ -1,157 +1,92 @@
-# Frontend View Models Contract
+# FRONTEND_VIEW_MODELS.md
 
 ## Purpose
+Define browser-facing view models for builds, runs, artifacts, diagnostics, policies, and flaky analysis.
 
-Define the browser-facing view models used by the operator UI.
+## Scope
+This file is normative for UI read-model shapes. If implementation notes elsewhere conflict with this file, this file wins unless an ADR explicitly supersedes it.
 
-## Design principles
-
-- frontend state is derived from authoritative backend state
-- browser view models may aggregate data from multiple domain entities
-- view models are stable contracts for UI feature work
-
-## View models
-
-### `RunListItem`
-
+## Build views
+### BuildListItem
 Fields:
-- `runId`
+- `buildId`
 - `workspaceId`
-- `repoLine`
-- `selectorSummary`
+- `scopeSummary`
 - `state`
-- `phase`
+- `reuseDecision`
 - `startedAtUtc`
 - `durationMs`
-- `summaryCounts`
-- `activeAttemptIndex?`
+- `linkedRunsCount`
 
-### `RunDetailsView`
-
+### BuildDetailsView
 Fields:
-- `runId`
-- `planId`
-- `repoLine`
-- `frameworkFamily`
+- `buildId`
 - `phase`
-- `state`
-- `currentStepIndex`
-- `stepCount`
-- `compatWarnings[]`
-- `summary`
-- `failureClassification?`
-- `predictedVsActual?`
+- `steps`
+- `reuseDecision`
+- `readinessToken`
+- `artifactSummary`
+- `failureClassification`
+- `reproCommand`
 
-### `StepProgressView`
-
+### BuildGraphInspectorView
 Fields:
-- `stepIndex`
-- `projectName`
-- `state`
-- `commandPreview`
-- `resultsDirectory`
-- `artifactsReady[]`
-- `durationMs?`
+- `buildPlanId`
+- `graphSummary`
+- `projectTargets`
+- `configuration`
+- `reasonForBuild`
+- `policyExplanation`
 
-### `LiveConsoleLine`
+### BuildPolicyView
+Fields:
+- `effectivePolicy`
+- `reuseExplanation`
+- `thresholdBytes`
+- `binlogEnabled`
+- `invalidations`
 
+## Run views
+### RunListItem
+### RunDetailsView
+### TestResultRow
+### SkipExplanationView
+### ReproCommandView
+
+These MUST carry build linkage fields where relevant, such as:
+- `linkedBuildId`
+- `linkedReadinessTokenId`
+- `buildReuseDecision`
+
+## Shared live views
+### LiveConsoleLine
 Fields:
 - `cursor`
 - `stream`
-- `ts`
+- `tsUtc`
 - `text`
-- `sensitiveRedactionApplied`
+- `ownerKind` (`build`, `run`)
+- `ownerId`
 
-### `TestResultRow`
+## Flaky views
+### FlakyHistoryView
+### AttemptTimelineView
+### QuarantineActionView
 
-Fields:
-- `testId`
-- `displayName`
-- `status`
-- `durationMs`
-- `attemptIndexes[]`
-- `categoryKeys[]`
-- `projectName`
-- `skipReason?`
-- `failureSignatureHash?`
-
-### `FailureDetailsView`
-
-Fields:
-- `testId`
-- `failureMessage`
-- `stackTrace`
-- `failureClassification`
-- `attemptComparisons[]`
-
-### `ArtifactLinkView`
-
-Fields:
-- `artifactId`
-- `artifactKind`
-- `storageKind`
-- `sizeBytes`
-- `retentionClass`
-- `downloadUrl`
-- `previewAvailable`
-- `sensitive`
-
-### `ReproCommandView`
-
-Fields:
-- `shell`
-- `commands[]`
-- `argv[][]`
-- `environmentSummary`
-- `warnings[]`
-
-### `SkipExplanationView`
-
-Fields:
-- `testId`
-- `reasonCode`
-- `confidence`
-- `requiresRuntimeValidation`
-- `message`
-- `inputsUsed[]`
-
-### `FlakyHistoryView`
-
-Fields:
-- `testId`
-- `window`
-- `classification`
-- `score`
-- `passRate`
-- `failureRate`
-- `skipRate`
-- `distinctFailureSignatures`
-- `attemptTimeline[]`
-- `mitigationRecommendations[]`
-
-### `AttemptComparisonView`
-
-Fields:
-- `runId`
-- `attempts[]`
-- `signals[]`
-- `environmentDiffs[]`
-- `durationComparison`
-- `signatureComparison`
-
-### `RunPlanInspectorView`
-
-Fields:
-- `planId`
-- `selectorExplanation`
-- `normalizedFilters[]`
-- `steps[]`
-- `predictedSkips[]`
-- `environmentProfileSummary`
+## Required UI pages
+- Builds list page
+- Build details page
+- Build graph / plan inspector
+- Runs list page
+- Run details page
+- Live console/output viewer
+- Results explorer
+- Artifact explorer
+- Diagnostics page
+- Flaky analysis page
+- Settings / policy page
 
 ## Validation requirements
-
-- frontend model snapshot tests
-- browser contract tests
-- partial-state rendering tests
-- nullability/optional-field tests
+- snapshot tests for view-model serialization
+- UI contract tests against API payloads
+- live update rendering tests for build and run pages

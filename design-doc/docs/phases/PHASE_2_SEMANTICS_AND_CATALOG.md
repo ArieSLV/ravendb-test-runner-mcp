@@ -1,72 +1,58 @@
-# PHASE 2 SEMANTICS AND CATALOG
+# Phase 2 — Branch-Aware Semantics and Catalog
 
 ## Purpose
-
-Build repository line detection, semantic plugins, category/requirement extraction, and test catalog.
+Implement workspace detection, repo line routing, capability matrix, and semantic plugins for v6.2, v7.1, and v7.2.
 
 ## Prerequisites
-
-Phases 0-1 complete
+Phase 0
 
 ## In scope
-
-- Workspace analysis, plugin routing, capability matrix, test catalog
-- contract-aligned implementation and validation artifacts
-- update of task statuses and handoff notes for this phase
+- line detection
+- plugin router
+- semantic plugins
+- catalog persistence
 
 ## Out of scope
+- production UI polish beyond what this phase requires
+- unrelated contract rewrites outside explicit deltas
+- ad hoc architectural renaming not covered by the frozen naming policy
 
-- Execution and UI behavior beyond contract mocks
-- architectural redesign beyond ADR-approved deltas
-
-## Touched projects/modules
-
-- RavenMcp.Semantics.Abstractions
-- RavenMcp.Semantics.Raven.V62
-- RavenMcp.Semantics.Raven.V71
-- RavenMcp.Semantics.Raven.V72
-- RavenMcp.Core
+## Touched modules
+- RavenDB.TestRunner.McpServer.Semantics.Abstractions
+- RavenDB.TestRunner.McpServer.Semantics.Raven.V62
+- RavenDB.TestRunner.McpServer.Semantics.Raven.V71
+- RavenDB.TestRunner.McpServer.Semantics.Raven.V72
 
 ## Required contracts
-
-- `docs/contracts/DOMAIN_MODEL.md`
-- `docs/contracts/VERSIONING_AND_CAPABILITIES.md`
-- `docs/contracts/ERROR_TAXONOMY.md`
+- DOMAIN_MODEL.md
+- VERSIONING_AND_CAPABILITIES.md
 
 ## Deliverables
-
-- phase-specific implementation artifacts
-- updated task statuses
-- phase completion note
-- validation evidence
+- line detection
+- plugin router
+- semantic plugins
+- catalog persistence
 
 ## Acceptance criteria
-
-- all mandatory deliverables for the phase exist
-- referenced contracts are honored
-- phase-level tests pass or are explicitly marked as blocked with reason
-- no undocumented architectural drift is introduced
+- phase outputs are stored in the expected modules and registries
+- phase-specific contracts remain satisfied
+- no unresolved critical TODOs remain inside this phase’s declared scope
+- human integrator can approve handoff to dependent phases
 
 ## Validation gates
-
-- unit and/or contract tests relevant to this phase
-- integration tests where the phase introduces runtime behavior
-- review by the integrator for shared contract impact
+- unit and contract tests for touched contracts
+- integration smoke for touched subsystem(s)
+- update docs/tasks if new constraints are discovered
 
 ## Main risks
-
-- shared contract drift
-- hidden dependency on unfinished neighboring work package
-- missing validation coverage
-- branch-specific behavior leakage into shared core
+- contract drift
+- insufficient validation
+- parallel work misalignment
 
 ## Handoff conditions
+- all required deliverables complete
+- no contract-breaking change left undocumented
+- ADRs added for any meaningful deviation
 
-- all touched documents updated
-- all task cards completed or explicitly split
-- handoff note written for each merged task
-- unresolved issues listed with owner and next step
-
-## Parallelization note
-
-May proceed in parallel with Phase 1 after Phase 0 is accepted.
+## May start in parallel with
+- WP_B

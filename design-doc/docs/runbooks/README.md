@@ -1,4 +1,3 @@
 # Runbooks
 
-This directory is reserved for operational runbooks produced during WP_J.
-Initial placeholder files are intentionally minimal until the packaging and validation work package is executed.
+This directory contains concise human runbooks. These documents are informative and subordinate to the architecture and contracts.

@@ -1,136 +1,71 @@
-# Dependency Graph
+# DEPENDENCY_GRAPH.md
 
 ## Purpose
-
-This document defines:
-- documentation dependency order,
-- implementation dependency order,
-- parallelization boundaries,
-- merge risk hotspots.
-
-## Document dependency graph
-
-```text
-DECISION_FREEZE
-  -> IMPLEMENTATION_SPEC
-  -> DOMAIN_MODEL
-  -> VERSIONING_AND_CAPABILITIES
-  -> STORAGE_MODEL
-  -> EVENT_MODEL
-  -> STATE_MACHINES
-  -> MCP_TOOLS
-  -> WEB_API
-  -> FRONTEND_VIEW_MODELS
-  -> ERROR_TAXONOMY
-  -> SECURITY_AND_REDACTION
-
-Contract files
-  -> Phase briefs
-  -> Work packages
-  -> Task cards
-```
-
-## Implementation dependency graph
-
-```text
-Phase 0: Foundation and contract freeze
-  -> Phase 1: Storage and registry
-  -> Phase 2: Semantics and catalog
-  -> Phase 3: Planning and execution
-  -> Phase 4: Results and diagnostics
-  -> Phase 5: MCP surface
-  -> Phase 6: Web API and live events
-  -> Phase 7: Frontend UI
-  -> Phase 8: Flaky subsystem
-  -> Phase 9: Validation and packaging
-```
+This document shows subsystem, phase, and work-package dependencies for RavenDB Test Runner MCP Server.
 
 ## Subsystem dependency graph
 
 ```text
-Core.Abstractions
-  -> Domain
-  -> Shared.Contracts
+RavenDB.TestRunner.McpServer.Core.Abstractions
+  -> RavenDB.TestRunner.McpServer.Domain
+  -> RavenDB.TestRunner.McpServer.Core
 
-Shared.Contracts
-  -> Storage.RavenEmbedded
-  -> Planning
-  -> Execution
-  -> Results
-  -> Flaky
-  -> MCP Hosts
-  -> Web.Api
-  -> Web.Ui
+RavenDB.TestRunner.McpServer.Storage.RavenEmbedded
+  -> RavenDB.TestRunner.McpServer.Domain
+  -> RavenDB.TestRunner.McpServer.Core.Abstractions
 
-Semantics.Abstractions
-  -> Semantics.Raven.V62
-  -> Semantics.Raven.V71
-  -> Semantics.Raven.V72
+RavenDB.TestRunner.McpServer.Semantics.Abstractions
+  -> RavenDB.TestRunner.McpServer.Domain
 
-Storage.RavenEmbedded
-  -> Core
-  -> Planning
-  -> Execution
-  -> Results
-  -> Flaky
-  -> Web.Api
-  -> MCP Hosts
+RavenDB.TestRunner.McpServer.Semantics.Raven.V62 / V71 / V72
+  -> RavenDB.TestRunner.McpServer.Semantics.Abstractions
+  -> RavenDB.TestRunner.McpServer.Domain
 
-Artifacts
-  -> Execution
-  -> Results
-  -> Web.Api
+RavenDB.TestRunner.McpServer.Build
+  -> RavenDB.TestRunner.McpServer.Core.Abstractions
+  -> RavenDB.TestRunner.McpServer.Domain
+  -> RavenDB.TestRunner.McpServer.Storage.RavenEmbedded
 
-Planning
-  -> Execution
+RavenDB.TestRunner.McpServer.TestExecution
+  -> RavenDB.TestRunner.McpServer.Build
+  -> RavenDB.TestRunner.McpServer.Semantics.Abstractions
+  -> RavenDB.TestRunner.McpServer.Storage.RavenEmbedded
 
-Execution
-  -> Results
-  -> Flaky
+RavenDB.TestRunner.McpServer.Results
+  -> RavenDB.TestRunner.McpServer.Build
+  -> RavenDB.TestRunner.McpServer.TestExecution
 
-Results
-  -> Flaky
-  -> Web.Api
-  -> MCP Hosts
+RavenDB.TestRunner.McpServer.Flaky
+  -> RavenDB.TestRunner.McpServer.Results
+  -> RavenDB.TestRunner.McpServer.TestExecution
+  -> RavenDB.TestRunner.McpServer.Build
 
-Web.Api
-  -> Web.Ui
+RavenDB.TestRunner.McpServer.Mcp.Host.Http / Stdio
+  -> RavenDB.TestRunner.McpServer.Core / Build / TestExecution / Results / Flaky
+
+RavenDB.TestRunner.McpServer.Web.Api
+  -> RavenDB.TestRunner.McpServer.Core / Build / TestExecution / Results / Flaky
+
+RavenDB.TestRunner.McpServer.Web.Ui
+  -> RavenDB.TestRunner.McpServer.Web.Api contracts + live events
 ```
 
-## Parallelization opportunities
+## Phase dependencies
+- Phase 0 is mandatory before any code
+- Phase 1 and Phase 2 may proceed in parallel after Phase 0
+- Phase 3 depends on Phase 0 and the storage contract baseline; it should start as soon as Phase 1 has enough registry primitives
+- Phase 4 depends on Build + Semantics + Storage
+- Phase 5 depends on Build + Test Execution
+- Phase 6 and 7 depend on the shared orchestration surfaces from prior phases
+- Phase 8 depends on API + event contracts being stable
+- Phase 9 depends on persisted attempts/results/builds
+- Phase 10 depends on all prior phases
 
-The following may proceed in parallel after Phase 0 contract freeze:
-
-- WP-B Storage and Registry
-- WP-C Semantics and Catalog
-- WP-F MCP Surface skeleton work
-
-The following may start after event and API contracts are frozen:
-
-- WP-G Web API and Streams
-- WP-H Frontend
-
-The following should start after run/result/attempt contracts are stable:
-
-- WP-I Flaky Analytics
-
-## Merge risk hotspots
-
-High-risk merge zones:
-
-- `docs/contracts/DOMAIN_MODEL.md`
-- `docs/contracts/EVENT_MODEL.md`
-- `docs/contracts/STORAGE_MODEL.md`
-- shared DTO package
-- run/attempt lifecycle code
-- event publication pipeline
-- browser live state contracts
-
-## Integrator responsibilities
-
-The integrator MUST:
-- enforce contract freeze before parallel coding
-- sequence shared DTO changes
-- serialize event model changes
-- review ADRs before merging architectural changes
-- maintain the task index status
+## Work package dependency summary
+- `WP_A` gates everything
+- `WP_B` and `WP_C` unblock `WP_D` and `WP_E`
+- `WP_D` unblocks deterministic build-to-test orchestration
+- `WP_E` and `WP_F` unblock `WP_G` and `WP_H`
+- `WP_H` unblocks `WP_I`
+- `WP_F` and `WP_E` unblock `WP_J`
+- `WP_K` is cross-cutting but closes last

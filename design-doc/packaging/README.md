@@ -1,4 +1,9 @@
-# Packaging
+# Packaging Notes
 
-Packaging scripts and standalone distribution assets are produced in WP_J.
-This placeholder exists to freeze the repository location expected by task cards.
+Packaging for RavenDB Test Runner MCP Server is deferred until Phase 10, but the package MUST preserve:
+- standalone local app startup,
+- browser UI hosting,
+- local Streamable HTTP MCP host,
+- optional stdio bridge host,
+- RavenDB Embedded storage bootstrap,
+- artifact-root configuration.

@@ -1,82 +1,42 @@
-# Security and Redaction Contract
+# SECURITY_AND_REDACTION.md
 
 ## Purpose
+Define local security posture, secret handling, redaction, and host-specific logging rules.
 
-Define local-security assumptions, sensitive-data handling, and redaction rules.
+## Scope
+This file is normative for the bounded area described below. If implementation notes elsewhere conflict with this file, this file wins unless an ADR explicitly supersedes it.
 
-## v1 trust model
 
-- local-first
-- single-user
-- localhost-bound services by default
-- trusted-local browser operator by default
+## Local trust model
+v1 is single-user local-first, but local surfaces are still required to avoid casual abuse and accidental leakage.
 
-This does NOT remove the need for secret handling, path validation, or protocol hygiene.
-
-## Sensitive inputs
-
-Sensitive inputs include:
-- embedded license values
-- repository test license values
-- tokens, secrets, keys, passwords
-- connection strings that embed credentials
-- selected environment variables
-
-## Redaction rules
-
-### Exact keys to redact
+## Redacted keys
+The implementation MUST redact at minimum:
 - `RAVEN_License`
-- `RAVEN_LicensePath` values when they reveal sensitive location details
+- `RAVEN_LicensePath`
 - `RAVEN_License_Path`
 - `RAVEN_LICENSE`
-- any configured secret aliases
-
-### Pattern-based redaction
 - `*TOKEN*`
 - `*SECRET*`
 - `*KEY*`
 - `*PASSWORD*`
-- `*CREDENTIAL*`
 
-### Connection-string redaction
-Credential-bearing segments MUST be redacted in previews, logs, and summaries.
+## Host rules
+### Streamable HTTP host
+- bind to localhost by default
+- validate origin headers for browser-facing interactions
+- keep session IDs and headers out of normal logs where unnecessary
 
-## Logging rules
+### stdio bridge host
+- MUST NOT write non-protocol data to stdout
+- MAY write logs to stderr
 
-### MCP stdio host
-- MUST NOT write logs to stdout
-- protocol output only on stdout
-- logs go to stderr or file/structured log sink
-
-### Browser/API host
-- logs may be structured and file/console based
-- sensitive fields must be redacted before emission
-
-## Path safety
-
-- artifact and workspace paths must be normalized
-- no path traversal outside permitted roots
-- downloads must resolve only to indexed and authorized artifacts
-
-## Browser exposure
-
-- localhost binding by default
-- explicit override required for non-loopback binding
-- v1 should warn loudly if exposed beyond localhost
-
-## Quarantine and automation auditability
-
-Any automated quarantine or mitigation action MUST record:
-- actor
-- policy
-- reason codes
-- timestamp
-- rollback path
+## Artifact security
+- sensitive artifacts MUST be marked as such in metadata
+- access in the browser SHOULD be explicit and auditable
+- plaintext license material MUST NOT be persisted as a normal log artifact
 
 ## Validation requirements
-
-- redaction tests
 - stdout purity tests for stdio host
-- path traversal tests
-- localhost-only default binding tests
-- audit record tests for automated actions
+- redaction tests for logs, API payloads, and persisted metadata previews
+- localhost/origin validation tests

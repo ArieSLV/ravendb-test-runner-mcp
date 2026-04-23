@@ -1,236 +1,119 @@
-# Storage Model Contract
+# STORAGE_MODEL.md
 
 ## Purpose
+Define RavenDB Embedded collections, IDs, indexes, attachments policy, and filesystem artifact ownership.
 
-Define how metadata, state, history, and compact artifacts are stored in RavenDB Embedded, and how that storage integrates with filesystem-backed raw artifacts.
+## Scope
+This file is normative for the bounded area described below. If implementation notes elsewhere conflict with this file, this file wins unless an ADR explicitly supersedes it.
 
-## Authoritative storage principles
 
-- RavenDB Embedded is mandatory.
-- RavenDB is the authoritative store for metadata/state/history.
-- The filesystem is the authoritative store for large raw artifacts.
-- RavenDB MAY store selected compact artifacts as attachments.
-- The storage layer MUST remain restart-safe and recoverable.
-
-## Database identity
-
-Database name:
-- `RavenMcpControlPlane`
-
-This name MAY be configured, but default tooling assumes it exists.
+## Authoritative storage rule
+RavenDB Embedded is the authoritative metadata store for RavenDB Test Runner MCP Server. The filesystem is the authoritative store for large raw artifacts.
 
 ## Collections
-
-The storage layer MUST define at least the following collections:
-
+Mandatory collections:
 - `WorkspaceSnapshots`
 - `SemanticSnapshots`
-- `CompatibilityMatrices`
-- `TestProjects`
-- `TestAssemblies`
-- `TestCategories`
+- `CapabilityMatrices`
+- `BuildGraphSnapshots`
+- `BuildPlans`
+- `BuildExecutions`
+- `BuildResults`
+- `BuildReadinessTokens`
 - `TestCatalogEntries`
-- `EnvironmentProfiles`
 - `RunPlans`
-- `Runs`
-- `RunEvents`
-- `RunArtifacts`
+- `RunExecutions`
+- `RunResults`
 - `AttemptPlans`
 - `AttemptResults`
-- `FlakyHistories`
-- `QuarantineDecisions`
+- `ArtifactRefs`
+- `FlakyFindings`
+- `QuarantineActions`
 - `Settings`
 - `EventCheckpoints`
+- `CleanupJournal`
 
-## Document ID conventions
-
-### Workspace snapshots
-`workspaces/<workspace-hash>`
-
-### Semantic snapshots
-`semantic-snapshots/<workspace-hash>/<snapshot-hash>`
-
-### Compatibility matrices
-`compatibility/<workspace-hash>/<matrix-hash>`
-
-### Test catalog entries
-`tests/<workspace-hash>/<project-id>/<test-hash>`
-
-### Environment profiles
-`environment-profiles/<profile-name>`
-
-### Run plans
-`run-plans/<run-id>`
-
-### Runs
-`runs/<run-id>`
-
-### Run events
-`run-events/<run-id>/<sequence-number>`
-
-### Run artifacts
-`run-artifacts/<run-id>/<artifact-id>`
-
-### Attempt plans
-`attempt-plans/<run-id>/<attempt-index>`
-
-### Attempt results
-`attempt-results/<run-id>/<attempt-index>`
-
-### Flaky histories
-`flaky-history/<test-id>`
-
-### Quarantine decisions
-`quarantine/<test-id>/<decision-id>`
-
-### Settings
-`settings/<settings-key>`
-
-### Event checkpoints
-`event-checkpoints/<consumer-name>`
-
-## Optimistic concurrency strategy
-
-- Optimistic concurrency MUST be enabled for mutable execution-state documents.
-- Mutable collections include:
-  - `Runs`
-  - `RunArtifacts`
-  - `AttemptResults`
-  - `FlakyHistories`
-  - `QuarantineDecisions`
-  - `Settings`
-  - `EventCheckpoints`
-- Immutable collections SHOULD be treated append-only where possible.
-
-## Mutable vs immutable documents
-
-### Immutable / append-only preferred
-- `WorkspaceSnapshots`
-- `SemanticSnapshots`
-- `CompatibilityMatrices`
-- `RunPlans`
-- `AttemptPlans`
-- `RunEvents`
-
-### Mutable
-- `Runs`
-- `RunArtifacts`
-- `AttemptResults`
-- `FlakyHistories`
-- `QuarantineDecisions`
-- `Settings`
-- `EventCheckpoints`
+## ID conventions
+Examples:
+- `workspaces/<workspace-hash>`
+- `semantic-snapshots/<workspace-hash>/<sem-hash>`
+- `capability-matrices/<workspace-hash>/<line>/<hash>`
+- `build-graphs/<workspace-hash>/<scope-hash>/<hash>`
+- `build-plans/<workspace-hash>/<date>/<guid>`
+- `builds/<workspace-hash>/<date>/<guid>`
+- `build-readiness/<workspace-hash>/<fingerprint>`
+- `run-plans/<workspace-hash>/<date>/<guid>`
+- `runs/<workspace-hash>/<date>/<guid>`
+- `attempts/<run-id>/<attempt-index>`
+- `artifacts/<kind>/<guid>`
+- `flaky-findings/<test-id>/<window>/<guid>`
 
 ## Indexes
+Required indexes at minimum:
+- builds by workspace + state + createdAt
+- builds by readiness token + fingerprint
+- runs by workspace + state + createdAt
+- artifacts by owner (build/run/attempt)
+- semantic snapshots by workspace + plugin
+- flaky findings by test + classification + updatedAt
+- quarantine actions by state + test
 
-The implementation MUST provide indexes for:
+## Optimistic concurrency
+Optimistic concurrency MUST be enabled for mutable lifecycle documents:
+- BuildExecutions
+- RunExecutions
+- AttemptResults
+- QuarantineActions
+- EventCheckpoints
 
-1. `Runs_ByState_StartedAt`
-2. `Runs_ByWorkspace_StartedAt`
-3. `RunArtifacts_ByRun_Kind`
-4. `TestCatalog_ByCategory_Project`
-5. `TestCatalog_ByFqn`
-6. `FlakyHistory_ByScore`
-7. `AttemptResults_ByRun_AttemptIndex`
-8. `RunEvents_ByRun_Sequence`
-9. `Quarantine_ByDecision_Confidence`
-10. `SemanticSnapshots_ByWorkspace_CreatedAt`
+Append-only result documents MAY avoid mutation where practical.
 
-## Attachment policy
+## Attachments policy
+### Use RavenDB attachments when
+- artifact size is at or below the configured threshold
+- artifact type is compact and useful to query or render directly
+- retaining the artifact with the document improves debugging ergonomics
 
-### RavenDB attachments are allowed for:
-- compact JSON exports
-- compact `trx` / `junit`
-- normalized compare artifacts
-- compact diagnostics summaries
-- compact console excerpts
+### Use filesystem when
+- artifact is large or unbounded
+- artifact is append-heavy
+- artifact is binary and potentially bulky
+- artifact is a dump, blame bundle, or large transcript
 
-### RavenDB attachments are not the default for:
-- large merged logs
-- `diag` files of significant size
-- crash dumps
-- blame bundles
-- bulky raw stdout/stderr streams
+## Filesystem root layout
+```text
+<artifact-root>/
+  builds/<build-id>/
+    command.json
+    stdout.log
+    stderr.log
+    merged.log
+    build.binlog
+    output-manifest.json
+  runs/<run-id>/
+    plan.json
+    summary.json
+    step-001/
+      stdout.log
+      stderr.log
+      merged.log
+      results.trx
+    attempts/
+      attempt-001/
+      attempt-002/
+```
 
-## Size-threshold rule
-
-Implement two configurable thresholds:
-
-- `CompactAttachmentThresholdBytes`
-- `InlinePreviewThresholdBytes`
-
-Default guidance:
-- artifacts at or below the compact threshold MAY be stored as attachments
-- artifacts above the compact threshold MUST be filesystem-backed unless an explicit override exists
-
-The exact numeric threshold is version-sensitive and must be validated on target developer machines.
-
-## Filesystem artifact root
-
-Canonical artifact root:
-- application-configured local path
-- default under developer-controlled application data directory
-
-Every artifact metadata document MUST store:
+## Retention metadata
+Each artifact ref MUST store:
+- owner kind and ID
 - storage kind
-- filesystem path if applicable
-- checksum
-- size
 - retention class
-- attempt/step/run linkage
-
-## Event persistence strategy
-
-Two storage layers exist:
-
-1. authoritative current run state in `Runs`
-2. append-only event log in `RunEvents`
-
-This enables:
-- replay
-- browser reconnect
-- audit trails
-- flaky analysis inputs
-
-## Cleanup and retention
-
-The storage layer MUST support:
-- soft expiration markers in RavenDB metadata
-- physical filesystem deletion workflow
-- attachment cleanup
-- orphan detection between RavenDB and filesystem
-- cleanup journal entries
-
-## Startup/bootstrap responsibilities
-
-The storage subsystem MUST:
-- start RavenDB Embedded
-- validate license presence
-- ensure database existence
-- ensure indexes
-- validate artifact root
-- detect and report startup blocking conditions
-
-## What is authoritative
-
-Authoritative:
-- collection names
-- ID patterns
-- optimistic concurrency policy
-- attachment policy
-- artifact-root relationship
-
-Not authoritative:
-- DTO field definitions
-- transport field subsets
+- createdAtUtc
+- expiresAtUtc (optional)
+- sensitive flag
+- preview availability
 
 ## Validation requirements
-
-- embedded bootstrap tests
-- license-probe-order tests
-- document ID format tests
-- optimistic concurrency tests
-- index existence tests
-- restart recovery tests
-- attachment-vs-filesystem routing tests
-- orphan cleanup tests
+- Restart recovery MUST not orphan active build/run records.
+- Cleanup MUST respect retention classes and active references.
+- Attachment threshold routing MUST be deterministic and test-covered.
