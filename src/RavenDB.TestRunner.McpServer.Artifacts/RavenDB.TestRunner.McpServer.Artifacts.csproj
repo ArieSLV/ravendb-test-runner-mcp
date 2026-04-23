@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>RavenDB.TestRunner.McpServer.Artifacts</RootNamespace>
+  </PropertyGroup>
+</Project>

@@ -9,6 +9,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RavenDB.TestRunner.McpServe
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RavenDB.TestRunner.McpServer.Shared.Contracts", "src\RavenDB.TestRunner.McpServer.Shared.Contracts\RavenDB.TestRunner.McpServer.Shared.Contracts.csproj", "{9F52A023-D5B8-4BD8-B640-E7F8B0DA0F62}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RavenDB.TestRunner.McpServer.Artifacts", "src\RavenDB.TestRunner.McpServer.Artifacts\RavenDB.TestRunner.McpServer.Artifacts.csproj", "{F3A2C2C2-06C2-4D16-8B06-A547D580C0A4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RavenDB.TestRunner.McpServer.Storage.RavenEmbedded", "src\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.csproj", "{D72C79CB-5FB5-4F54-A845-2B0F9ADAF941}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests", "tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests.csproj", "{4F8D85D3-B1B4-4500-AD3E-B02845C21A6B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +33,18 @@ Global
 		{9F52A023-D5B8-4BD8-B640-E7F8B0DA0F62}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9F52A023-D5B8-4BD8-B640-E7F8B0DA0F62}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9F52A023-D5B8-4BD8-B640-E7F8B0DA0F62}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F3A2C2C2-06C2-4D16-8B06-A547D580C0A4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F3A2C2C2-06C2-4D16-8B06-A547D580C0A4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F3A2C2C2-06C2-4D16-8B06-A547D580C0A4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F3A2C2C2-06C2-4D16-8B06-A547D580C0A4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D72C79CB-5FB5-4F54-A845-2B0F9ADAF941}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D72C79CB-5FB5-4F54-A845-2B0F9ADAF941}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D72C79CB-5FB5-4F54-A845-2B0F9ADAF941}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D72C79CB-5FB5-4F54-A845-2B0F9ADAF941}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4F8D85D3-B1B4-4500-AD3E-B02845C21A6B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4F8D85D3-B1B4-4500-AD3E-B02845C21A6B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4F8D85D3-B1B4-4500-AD3E-B02845C21A6B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4F8D85D3-B1B4-4500-AD3E-B02845C21A6B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
