@@ -18,11 +18,18 @@
   - missing outputs,
   - expired readiness,
   - forced rebuild / forced incremental policies,
-  - expert skip-build policy.
+  - expert skip-build policy only when the build ownership boundary has already accepted expert mode.
 - Added readiness token issuance with deterministic `build-readiness/<workspace-hash>/<fingerprint>` document IDs.
 - Added readiness invalidation records that keep `BuildReadinessToken.status` separate from `BuildExecution.state` and `BuildResult.status`.
 - Added explicit superseded readiness invalidation for newer incompatible fingerprints.
-- Added focused build tests for fingerprint determinism, reuse acceptance, stale rebuilds, readiness-token fingerprint mismatch, missing output invalidation, forced rebuild invalidation, ready token issuance, expired readiness invalidation, and superseded readiness status.
+- Added focused build tests for fingerprint determinism, reuse acceptance, stale rebuilds, readiness-token fingerprint mismatch, missing output invalidation, forced rebuild invalidation, ready token issuance, expired readiness invalidation, superseded readiness status, and expert-skip ownership proof.
+
+## Corrective pass
+- Review finding fixed: `expert_skip_build` can no longer be accepted by `BuildReuseEngine` from policy mode alone.
+- `BuildReuseEvaluationRequest` now carries an optional `BuildDependencyResolution` proof from `BuildOwnershipModel`.
+- `expert_skip_build` is accepted only when `OwnershipResolution.Kind == expert_skip_build_accepted`.
+- Missing or rejected ownership proof returns `rejected_existing` with `expert_mode_required`, without requiring a new build and without pretending expert skip was accepted.
+- The accepted skip path still emits `skipped_by_policy` with both `expert_skip_build` and `expert_skip_build_accepted` reason vocabulary.
 
 ## Touched contracts
 - Implementation remains aligned with:
@@ -41,8 +48,8 @@
 - `git diff --check` passed.
 - `rg -n "Process|Start\\(|dotnet|MSBuild|Microsoft.Build|Exec|BuildManager" src\RavenDB.TestRunner.McpServer.Build tests\RavenDB.TestRunner.McpServer.Build.Tests` was reviewed; matches are existing build/test execution vocabulary such as `BuildExecution`, not process spawning, `dotnet`, MSBuild invocation, or `Microsoft.Build` usage in product code.
 - `dotnet build .\RavenDB.TestRunner.McpServer.sln -m:1 -v minimal` succeeded with the `AGENTS.md` isolated .NET environment.
-- `dotnet test .\tests\RavenDB.TestRunner.McpServer.Build.Tests\RavenDB.TestRunner.McpServer.Build.Tests.csproj -m:1 -v minimal --logger "trx;LogFileName=wp-d-003-fingerprint-reuse.trx"` succeeded.
-- Build test result: 28 tests discovered/executed, 28 passed.
+- `dotnet test .\tests\RavenDB.TestRunner.McpServer.Build.Tests\RavenDB.TestRunner.McpServer.Build.Tests.csproj -m:1 -v minimal --logger "trx;LogFileName=wp-d-003-expert-skip-corrective.trx"` succeeded.
+- Build test result: 31 tests discovered/executed, 31 passed.
 - Storage tests were not run because no `Storage.RavenEmbedded` files changed.
 - Build artifact/binlog smoke execution was not run because actual build execution/process spawning belongs to later `WP_D` tasks.
 - Generated `.tmp-dotnet-home` and TRX/TestResults artifacts were removed after validation.
