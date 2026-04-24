@@ -1,5 +1,4 @@
 using Raven.Client.ServerWide;
-using Raven.Client.Documents.Conventions;
 using Raven.Embedded;
 using RavenDB.TestRunner.McpServer.Artifacts;
 using RavenDB.TestRunner.McpServer.Shared.Contracts.DocumentConventions;
@@ -35,8 +34,7 @@ public static class EmbeddedDatabaseBootstrapper
         {
             DatabaseName = options.DatabaseName
         });
-        databaseOptions.Conventions = new DocumentConventions();
-        databaseOptions.Conventions.UseOptimisticConcurrency = true;
+        databaseOptions.Conventions = RavenStorageDocumentConventions.Create();
 
         var store = await EmbeddedServer.Instance.GetDocumentStoreAsync(databaseOptions).ConfigureAwait(false);
         var schemaBaseline = await RavenStorageSchemaInitializer

@@ -32,6 +32,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             Assert.Equal(ArtifactStorageKinds.RavenAttachment, result.AuthoritativeArtifactStorageKind);
             Assert.Contains("ArtifactRefs", result.MandatoryCollections, StringComparer.Ordinal);
             AssertStorageSchemaBaseline(result);
+            AssertStaticIndexesQueryPascalCaseProbeDocuments(result);
 
             string documentId = "artifact-ref-probes/" + Guid.NewGuid().ToString("N");
 
@@ -131,6 +132,186 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         }
     }
 
+    private static void AssertStaticIndexesQueryPascalCaseProbeDocuments(EmbeddedDatabaseBootstrapResult result)
+    {
+        string suffix = Guid.NewGuid().ToString("N");
+        string workspaceId = "workspace/" + suffix;
+        DateTime createdAtUtc = DateTime.UtcNow;
+
+        StaticIndexProbe[] probes =
+        [
+            new(
+                "BuildExecutions/ByWorkspaceStateCreatedAt",
+                DocumentCollectionNames.BuildExecutions,
+                "builds/" + suffix,
+                new StaticIndexProbeDocument
+                {
+                    ProbeKey = "build-execution-" + suffix,
+                    WorkspaceId = workspaceId,
+                    State = "queued",
+                    CreatedAtUtc = createdAtUtc
+                },
+                [new("workspaceId", workspaceId), new("state", "queued")]),
+            new(
+                "BuildReadinessTokens/ByFingerprintStatus",
+                DocumentCollectionNames.BuildReadinessTokens,
+                "build-readiness/" + suffix,
+                new StaticIndexProbeDocument
+                {
+                    ProbeKey = "readiness-token-" + suffix,
+                    WorkspaceId = workspaceId,
+                    FingerprintId = "fingerprint/" + suffix,
+                    ScopeHash = "scope-" + suffix,
+                    Configuration = "Debug",
+                    Status = "valid"
+                },
+                [new("fingerprintId", "fingerprint/" + suffix), new("status", "valid")]),
+            new(
+                "RunExecutions/ByWorkspaceStateCreatedAt",
+                DocumentCollectionNames.RunExecutions,
+                "runs/" + suffix,
+                new StaticIndexProbeDocument
+                {
+                    ProbeKey = "run-execution-" + suffix,
+                    WorkspaceId = workspaceId,
+                    State = "running",
+                    CreatedAtUtc = createdAtUtc
+                },
+                [new("workspaceId", workspaceId), new("state", "running")]),
+            new(
+                "ArtifactRefs/ByOwner",
+                DocumentCollectionNames.ArtifactRefs,
+                "artifacts/by-owner/" + suffix,
+                new StaticIndexProbeDocument
+                {
+                    ProbeKey = "artifact-owner-" + suffix,
+                    OwnerKind = "build",
+                    OwnerId = "builds/" + suffix,
+                    ArtifactKind = ArtifactKindCatalog.BuildCommand,
+                    CreatedAtUtc = createdAtUtc,
+                    RetentionClass = "short"
+                },
+                [new("ownerKind", "build"), new("ownerId", "builds/" + suffix)]),
+            new(
+                "ArtifactRefs/ByKindCreatedAtRetentionClass",
+                DocumentCollectionNames.ArtifactRefs,
+                "artifacts/by-kind/" + suffix,
+                new StaticIndexProbeDocument
+                {
+                    ProbeKey = "artifact-kind-" + suffix,
+                    OwnerKind = "run",
+                    OwnerId = "runs/" + suffix,
+                    ArtifactKind = "test-log/" + suffix,
+                    CreatedAtUtc = createdAtUtc,
+                    RetentionClass = "diagnostic/" + suffix
+                },
+                [new("artifactKind", "test-log/" + suffix), new("retentionClass", "diagnostic/" + suffix)]),
+            new(
+                "SemanticSnapshots/ByWorkspacePlugin",
+                DocumentCollectionNames.SemanticSnapshots,
+                "semantic-snapshots/" + suffix,
+                new StaticIndexProbeDocument
+                {
+                    ProbeKey = "semantic-snapshot-" + suffix,
+                    WorkspaceId = workspaceId,
+                    PluginId = "ravendb-v72"
+                },
+                [new("workspaceId", workspaceId), new("pluginId", "ravendb-v72")]),
+            new(
+                "FlakyFindings/ByTestClassificationUpdatedAt",
+                DocumentCollectionNames.FlakyFindings,
+                "flaky-findings/" + suffix,
+                new StaticIndexProbeDocument
+                {
+                    ProbeKey = "flaky-finding-" + suffix,
+                    TestId = "tests/" + suffix,
+                    Classification = "intermittent/" + suffix,
+                    UpdatedAtUtc = createdAtUtc
+                },
+                [new("testId", "tests/" + suffix), new("classification", "intermittent/" + suffix)]),
+            new(
+                "QuarantineActions/ByStateTest",
+                DocumentCollectionNames.QuarantineActions,
+                "quarantine-actions/" + suffix,
+                new StaticIndexProbeDocument
+                {
+                    ProbeKey = "quarantine-action-" + suffix,
+                    State = "active/" + suffix,
+                    TestId = "tests/" + suffix
+                },
+                [new("state", "active/" + suffix), new("testId", "tests/" + suffix)])
+        ];
+
+        using (var seedSession = result.Store.OpenSession())
+        {
+            seedSession.Advanced.WaitForIndexesAfterSaveChanges(
+                timeout: TimeSpan.FromSeconds(30),
+                throwOnTimeout: true);
+
+            foreach (var probe in probes)
+            {
+                seedSession.Store(probe.Document, probe.DocumentId);
+                seedSession.Advanced.GetMetadataFor(probe.Document)["@collection"] = probe.CollectionName;
+            }
+
+            seedSession.SaveChanges();
+        }
+
+        using (var verificationSession = result.Store.OpenSession())
+        {
+            foreach (var probe in probes)
+            {
+                StaticIndexProbeDocument storedProbe =
+                    verificationSession.Load<StaticIndexProbeDocument>(probe.DocumentId);
+                Assert.NotNull(storedProbe);
+                Assert.Equal(probe.Document.ProbeKey, storedProbe.ProbeKey);
+                Assert.Equal(
+                    probe.CollectionName,
+                    verificationSession.Advanced.GetMetadataFor(storedProbe)["@collection"]?.ToString());
+            }
+        }
+
+        foreach (var probe in probes)
+        {
+            using var querySession = result.Store.OpenSession();
+            var unfilteredMatches = querySession.Advanced
+                .DocumentQuery<StaticIndexProbeDocument>(indexName: probe.IndexName)
+                .WaitForNonStaleResults(TimeSpan.FromSeconds(30))
+                .ToList();
+            var query = querySession.Advanced
+                .DocumentQuery<StaticIndexProbeDocument>(indexName: probe.IndexName)
+                .WaitForNonStaleResults(TimeSpan.FromSeconds(30));
+
+            for (var i = 0; i < probe.Filters.Count; i++)
+            {
+                if (i > 0)
+                {
+                    query = query.AndAlso();
+                }
+
+                query = query.WhereEquals(probe.Filters[i].FieldName, probe.Filters[i].Value);
+            }
+
+            var matches = query.ToList();
+            Assert.True(
+                matches.Count == 1,
+                $"Expected one probe from static index '{probe.IndexName}' for document '{probe.DocumentId}', but found {matches.Count}; unfiltered static index returned {unfilteredMatches.Count} documents. {DescribeIndexDiagnostics(result, probe.IndexName)}");
+            StaticIndexProbeDocument match = matches[0];
+            Assert.Equal(probe.Document.ProbeKey, match.ProbeKey);
+        }
+    }
+
+    private static string DescribeIndexDiagnostics(EmbeddedDatabaseBootstrapResult result, string indexName)
+    {
+        var stats = result.Store.Maintenance.Send(new GetIndexStatisticsOperation(indexName));
+        var indexErrors = result.Store.Maintenance.Send(new GetIndexErrorsOperation([indexName]));
+        var errors = indexErrors.SelectMany(index => index.Errors ?? []).ToArray();
+        string firstError = errors.Length == 0 ? "none" : errors[0].Error;
+
+        return
+            $"Index stats: entries={stats.EntriesCount}, mapAttempts={stats.MapAttempts}, mapSuccesses={stats.MapSuccesses}, mapErrors={stats.MapErrors}, state={stats.State}; indexErrors={errors.Length}; firstError={firstError}";
+    }
+
     private static void AssertOptimisticConcurrencyIsEnabled(EmbeddedDatabaseBootstrapResult result)
     {
         string documentId = "concurrency-probes/" + Guid.NewGuid().ToString("N");
@@ -221,6 +402,50 @@ public sealed class EmbeddedDatabaseBootstrapperTests
     private sealed class MutableConcurrencyProbeDocument
     {
         public int Version { get; set; }
+    }
+
+    private sealed record StaticIndexProbe(
+        string IndexName,
+        string CollectionName,
+        string DocumentId,
+        StaticIndexProbeDocument Document,
+        IReadOnlyList<StaticIndexProbeFilter> Filters);
+
+    private sealed record StaticIndexProbeFilter(string FieldName, object Value);
+
+    private sealed class StaticIndexProbeDocument
+    {
+        public string ProbeKey { get; init; } = string.Empty;
+
+        public string WorkspaceId { get; init; } = string.Empty;
+
+        public string State { get; init; } = string.Empty;
+
+        public DateTime CreatedAtUtc { get; init; }
+
+        public string FingerprintId { get; init; } = string.Empty;
+
+        public string ScopeHash { get; init; } = string.Empty;
+
+        public string Configuration { get; init; } = string.Empty;
+
+        public string Status { get; init; } = string.Empty;
+
+        public string OwnerKind { get; init; } = string.Empty;
+
+        public string OwnerId { get; init; } = string.Empty;
+
+        public string ArtifactKind { get; init; } = string.Empty;
+
+        public string RetentionClass { get; init; } = string.Empty;
+
+        public string PluginId { get; init; } = string.Empty;
+
+        public string TestId { get; init; } = string.Empty;
+
+        public string Classification { get; init; } = string.Empty;
+
+        public DateTime UpdatedAtUtc { get; init; }
     }
 
     private static EmbeddedServerConfiguration CreateLifecycleConfiguration(
