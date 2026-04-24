@@ -10,8 +10,12 @@
   - mutable/concurrency-owned collections receive bounded revisions
   - append-oriented baseline collections have revisions explicitly disabled until later tasks require mutation history
 - Configured embedded document stores with optimistic concurrency before RavenDB initializes the store.
+- Added `RavenStorageDocumentConventions` as the storage convention factory for embedded stores.
+- Made lowerCamel persisted JSON field naming explicit by combining RavenDB property-name conversion with Newtonsoft camelCase serialization conventions.
+- Made lowerCamel index-definition property naming explicit for RavenDB 7.x.
 - Applied index and revision baseline during embedded database bootstrap.
 - Exposed the applied schema baseline in `EmbeddedDatabaseBootstrapResult`.
+- Added canary coverage proving every static index can query real stored C# probe DTOs with PascalCase properties through lowerCamel index fields.
 
 ## Touched contracts
 - No design contract documents were changed.
@@ -28,11 +32,27 @@
 - Validation scope covered:
   - embedded startup/database initialization
   - required index deployment
+  - lowerCamel persisted field naming through storage conventions
+  - static index semantic queries against stored PascalCase probe DTOs for all 8 static indexes
   - revisions-policy decisions for all mandatory collections
   - optimistic concurrency convention and actual concurrency conflict behavior
   - artifact metadata routing remains attachments-first
   - WP_B_001 process-wide embedded lifecycle behavior remains intact
 - Diff hygiene: `git diff --check` passed.
+
+## Corrective pass
+- Commit `158ea2e` fixes the static-index field-casing validation gap found after the first WP_B_002 completion.
+- The embedded bootstrap now uses `RavenStorageDocumentConventions.Create()` instead of inline ad hoc conventions.
+- The lowerCamel storage invariant covers document serialization, client property-name conversion, and RavenDB 7.x index-definition property-name conversion.
+- The integration test stores deterministic canary documents and queries these static indexes by lowerCamel fields:
+  - `BuildExecutions/ByWorkspaceStateCreatedAt`
+  - `BuildReadinessTokens/ByFingerprintStatus`
+  - `RunExecutions/ByWorkspaceStateCreatedAt`
+  - `ArtifactRefs/ByOwner`
+  - `ArtifactRefs/ByKindCreatedAtRetentionClass`
+  - `SemanticSnapshots/ByWorkspacePlugin`
+  - `FlakyFindings/ByTestClassificationUpdatedAt`
+  - `QuarantineActions/ByStateTest`
 
 ## Progress ledger update
 - Mark `WP_B_002_collections_indexes_and_optimistic_concurrency` as `Done`.
@@ -52,3 +72,4 @@
   - RavenDB `7.2` revisions configuration docs: `https://docs.ravendb.net/7.2/document-extensions/revisions/client-api/operations/configure-revisions/`
   - RavenDB `7.2` optimistic concurrency docs: `https://docs.ravendb.net/7.2/client-api/session/configuration/how-to-enable-optimistic-concurrency/`
 - Package/source behavior verified against installed `RavenDB.Embedded` / `RavenDB.Client` `7.2.1`.
+- Corrective field-casing pass additionally used official RavenDB 7.x conventions documentation for camelCase serialization requirements and verified the exact APIs against installed `RavenDB.Client` `7.2.1`.
