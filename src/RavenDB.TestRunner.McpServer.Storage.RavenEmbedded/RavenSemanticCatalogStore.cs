@@ -138,11 +138,127 @@ public sealed class RavenSemanticCatalogStore
         TDocument? existing = session.Load<TDocument>(documentId);
         if (existing is not null)
         {
+            string? payloadMismatch = DescribePayloadMismatch(existing, document);
+            if (payloadMismatch is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Immutable semantic catalog document '{documentId}' already exists with different payload: {payloadMismatch}.");
+            }
+
             return;
         }
 
         session.Store(document, documentId);
         session.Advanced.GetMetadataFor(document)["@collection"] = collectionName;
+    }
+
+    private static string? DescribePayloadMismatch<TDocument>(TDocument existing, TDocument requested)
+    {
+        return (existing, requested) switch
+        {
+            (SemanticSnapshotDocument existingSnapshot, SemanticSnapshotDocument requestedSnapshot) =>
+                DescribePayloadMismatch(existingSnapshot, requestedSnapshot),
+            (CapabilityMatrixDocument existingMatrix, CapabilityMatrixDocument requestedMatrix) =>
+                DescribePayloadMismatch(existingMatrix, requestedMatrix),
+            (TestCategoryCatalogEntryDocument existingCategory, TestCategoryCatalogEntryDocument requestedCategory) =>
+                DescribePayloadMismatch(existingCategory, requestedCategory),
+            _ => EqualityComparer<TDocument>.Default.Equals(existing, requested) ? null : "unsupported-document-type"
+        };
+    }
+
+    private static string? DescribePayloadMismatch(
+        SemanticSnapshotDocument existing,
+        SemanticSnapshotDocument requested)
+    {
+        return FirstMismatch(
+            CompareString("workspaceId", existing.WorkspaceId, requested.WorkspaceId),
+            CompareString("pluginId", existing.PluginId, requested.PluginId),
+            CompareString("categoryCatalogVersion", existing.CategoryCatalogVersion, requested.CategoryCatalogVersion),
+            CompareString("customAttributeRegistryVersion", existing.CustomAttributeRegistryVersion, requested.CustomAttributeRegistryVersion),
+            CompareString("topologyHash", existing.TopologyHash, requested.TopologyHash),
+            CompareValue("supportsAiEmbeddingsSemantics", existing.SupportsAiEmbeddingsSemantics, requested.SupportsAiEmbeddingsSemantics),
+            CompareValue("supportsAiConnectionStrings", existing.SupportsAiConnectionStrings, requested.SupportsAiConnectionStrings),
+            CompareValue("supportsAiAgentsSemantics", existing.SupportsAiAgentsSemantics, requested.SupportsAiAgentsSemantics),
+            CompareValue("supportsAiTestAttributes", existing.SupportsAiTestAttributes, requested.SupportsAiTestAttributes),
+            CompareValue("createdAtUtc", NormalizeUtc(existing.CreatedAtUtc), NormalizeUtc(requested.CreatedAtUtc)));
+    }
+
+    private static string? DescribePayloadMismatch(
+        CapabilityMatrixDocument existing,
+        CapabilityMatrixDocument requested)
+    {
+        return FirstMismatch(
+            CompareString("workspaceId", existing.WorkspaceId, requested.WorkspaceId),
+            CompareString("pluginId", existing.PluginId, requested.PluginId),
+            CompareString("repoLine", existing.RepoLine, requested.RepoLine),
+            CompareString("frameworkFamily", existing.FrameworkFamily, requested.FrameworkFamily),
+            CompareString("runnerFamily", existing.RunnerFamily, requested.RunnerFamily),
+            CompareString("adapterFamily", existing.AdapterFamily, requested.AdapterFamily),
+            AreEquivalent(existing.Capabilities, requested.Capabilities) ? null : "capabilities",
+            existing.VersionSensitivePoints.SequenceEqual(requested.VersionSensitivePoints, StringComparer.Ordinal) ? null : "versionSensitivePoints",
+            CompareValue("createdAtUtc", NormalizeUtc(existing.CreatedAtUtc), NormalizeUtc(requested.CreatedAtUtc)));
+    }
+
+    private static string? DescribePayloadMismatch(
+        TestCategoryCatalogEntryDocument existing,
+        TestCategoryCatalogEntryDocument requested)
+    {
+        return FirstMismatch(
+            CompareString("workspaceId", existing.WorkspaceId, requested.WorkspaceId),
+            CompareString("semanticSnapshotId", existing.SemanticSnapshotId, requested.SemanticSnapshotId),
+            CompareString("catalogVersion", existing.CatalogVersion, requested.CatalogVersion),
+            CompareString("categoryKey", existing.CategoryKey, requested.CategoryKey),
+            CompareString("traitKey", existing.TraitKey, requested.TraitKey),
+            CompareString("traitValue", existing.TraitValue, requested.TraitValue),
+            existing.Aliases.SequenceEqual(requested.Aliases, StringComparer.Ordinal) ? null : "aliases",
+            existing.Implies.SequenceEqual(requested.Implies, StringComparer.Ordinal) ? null : "implies",
+            existing.RepoLineSupport.SequenceEqual(requested.RepoLineSupport, StringComparer.Ordinal) ? null : "repoLineSupport",
+            CompareValue("createdAtUtc", NormalizeUtc(existing.CreatedAtUtc), NormalizeUtc(requested.CreatedAtUtc)));
+    }
+
+    private static bool AreEquivalent(
+        IReadOnlyDictionary<string, bool> existing,
+        IReadOnlyDictionary<string, bool> requested)
+    {
+        return existing
+            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+            .SequenceEqual(
+                requested.OrderBy(pair => pair.Key, StringComparer.Ordinal),
+                KeyValuePairComparer.Instance);
+    }
+
+    private sealed class KeyValuePairComparer : IEqualityComparer<KeyValuePair<string, bool>>
+    {
+        public static KeyValuePairComparer Instance { get; } = new();
+
+        public bool Equals(KeyValuePair<string, bool> x, KeyValuePair<string, bool> y)
+        {
+            return string.Equals(x.Key, y.Key, StringComparison.Ordinal) && x.Value == y.Value;
+        }
+
+        public int GetHashCode(KeyValuePair<string, bool> obj)
+        {
+            return HashCode.Combine(StringComparer.Ordinal.GetHashCode(obj.Key), obj.Value);
+        }
+    }
+
+    private static string? FirstMismatch(params string?[] mismatches)
+    {
+        return mismatches.FirstOrDefault(mismatch => mismatch is not null);
+    }
+
+    private static string? CompareString(string fieldName, string existing, string requested)
+    {
+        return string.Equals(existing, requested, StringComparison.Ordinal)
+            ? null
+            : $"{fieldName} existing='{existing}' requested='{requested}'";
+    }
+
+    private static string? CompareValue<T>(string fieldName, T existing, T requested)
+    {
+        return EqualityComparer<T>.Default.Equals(existing, requested)
+            ? null
+            : $"{fieldName} existing='{existing}' requested='{requested}'";
     }
 
     private static void ValidateRequest(SemanticCatalogPersistenceRequest request)

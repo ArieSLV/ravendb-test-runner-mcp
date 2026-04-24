@@ -952,7 +952,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
                 [RepoLines.V71, RepoLines.V72])
         ];
 
-        SemanticCatalogPersistenceResult v62 = catalogStore.Save(CreateSemanticCatalogRequest(
+        SemanticCatalogPersistenceRequest v62Request = CreateSemanticCatalogRequest(
             workspaceId,
             "RavenV62Semantics",
             RepoLines.V62,
@@ -961,9 +961,10 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             "catalog-v62-" + suffix,
             createdAtUtc,
             CreateCapabilityMatrix(RepoLines.V62, "xunit.v2", supportsAi: false, supportsXunitV3SourceInfo: false),
-            categories));
+            categories);
+        SemanticCatalogPersistenceResult v62 = catalogStore.Save(v62Request);
 
-        SemanticCatalogPersistenceResult v71 = catalogStore.Save(CreateSemanticCatalogRequest(
+        SemanticCatalogPersistenceRequest v71Request = CreateSemanticCatalogRequest(
             workspaceId,
             "RavenV71Semantics",
             RepoLines.V71,
@@ -972,9 +973,10 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             "catalog-v71-" + suffix,
             createdAtUtc,
             CreateCapabilityMatrix(RepoLines.V71, "xunit.v2", supportsAi: true, supportsXunitV3SourceInfo: false),
-            categories));
+            categories);
+        SemanticCatalogPersistenceResult v71 = catalogStore.Save(v71Request);
 
-        SemanticCatalogPersistenceResult v72 = catalogStore.Save(CreateSemanticCatalogRequest(
+        SemanticCatalogPersistenceRequest v72Request = CreateSemanticCatalogRequest(
             workspaceId,
             "RavenV72Semantics",
             RepoLines.V72,
@@ -983,11 +985,16 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             "catalog-v72-" + suffix,
             createdAtUtc,
             CreateCapabilityMatrix(RepoLines.V72, "xunit.v3", supportsAi: true, supportsXunitV3SourceInfo: true),
-            categories));
+            categories);
+        SemanticCatalogPersistenceResult v72 = catalogStore.Save(v72Request);
+        SemanticCatalogPersistenceResult repeatedV72 = catalogStore.Save(v72Request);
 
         Assert.Equal("semantic-snapshots/" + workspaceId + "/sem-v62-" + suffix, v62.SemanticSnapshotId);
         Assert.Equal("capability-matrices/" + workspaceId + "/v7.2/matrix-v72-" + suffix, v72.CapabilityMatrixId);
         Assert.Equal(2, v72.CategoryCatalogEntryIds.Count);
+        Assert.Equal(v72.SemanticSnapshotId, repeatedV72.SemanticSnapshotId);
+        Assert.Equal(v72.CapabilityMatrixId, repeatedV72.CapabilityMatrixId);
+        Assert.Equal(v72.CategoryCatalogEntryIds, repeatedV72.CategoryCatalogEntryIds);
 
         SemanticSnapshotDocument? v72Snapshot = catalogStore.LoadSemanticSnapshot(v72.SemanticSnapshotId);
         Assert.NotNull(v72Snapshot);
@@ -1017,6 +1024,51 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         Assert.All(v72Catalog, entry => Assert.Equal(v72.SemanticSnapshotId, entry.SemanticSnapshotId));
         Assert.Equal(new[] { RepoLines.V71, RepoLines.V72 }, v72Catalog[0].RepoLineSupport);
         Assert.Equal(DocumentCollectionNames.TestCatalogEntries, ReadDocumentCollectionName<TestCategoryCatalogEntryDocument>(result, v72Catalog[0].TestCatalogEntryId));
+
+        Assert.Throws<InvalidOperationException>(() => catalogStore.Save(CreateSemanticCatalogRequest(
+            workspaceId,
+            "RavenV72Semantics.Drifted",
+            RepoLines.V72,
+            "sem-v72-" + suffix,
+            "matrix-v72-semantic-drift-" + suffix,
+            "catalog-v72-semantic-drift-" + suffix,
+            createdAtUtc,
+            CreateCapabilityMatrix(RepoLines.V72, "xunit.v3", supportsAi: true, supportsXunitV3SourceInfo: true),
+            categories,
+            customAttributeRegistryVersion: "attributes-v72-drifted")));
+
+        Assert.Throws<InvalidOperationException>(() => catalogStore.Save(CreateSemanticCatalogRequest(
+            workspaceId,
+            "RavenV72Semantics",
+            RepoLines.V72,
+            "sem-v72-matrix-drift-" + suffix,
+            "matrix-v72-" + suffix,
+            "catalog-v72-matrix-drift-" + suffix,
+            createdAtUtc,
+            CreateCapabilityMatrix(RepoLines.V72, "xunit.v2", supportsAi: false, supportsXunitV3SourceInfo: false),
+            categories)));
+
+        TestCategoryCatalogEntry[] driftedCategories =
+        [
+            new(
+                "ai",
+                "Trait",
+                "AI-Changed",
+                ["changed-alias"],
+                ["changed-implies"],
+                [RepoLines.V62])
+        ];
+
+        Assert.Throws<InvalidOperationException>(() => catalogStore.Save(CreateSemanticCatalogRequest(
+            workspaceId,
+            "RavenV72Semantics",
+            RepoLines.V72,
+            "sem-v72-category-drift-" + suffix,
+            "matrix-v72-category-drift-" + suffix,
+            "catalog-v72-" + suffix,
+            createdAtUtc,
+            CreateCapabilityMatrix(RepoLines.V72, "xunit.v3", supportsAi: true, supportsXunitV3SourceInfo: true),
+            driftedCategories)));
 
         using (var querySession = result.Store.OpenSession())
         {
@@ -1137,7 +1189,8 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         string categoryCatalogVersion,
         DateTime createdAtUtc,
         CapabilityMatrix capabilityMatrix,
-        IReadOnlyCollection<TestCategoryCatalogEntry> categories)
+        IReadOnlyCollection<TestCategoryCatalogEntry> categories,
+        string? customAttributeRegistryVersion = null)
     {
         return new(
             workspaceId,
@@ -1146,7 +1199,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             topologyHash,
             capabilityMatrixHash,
             categoryCatalogVersion,
-            "attributes-" + repoLine.Replace(".", string.Empty, StringComparison.Ordinal),
+            customAttributeRegistryVersion ?? "attributes-" + repoLine.Replace(".", string.Empty, StringComparison.Ordinal),
             capabilityMatrix,
             categories,
             createdAtUtc);
