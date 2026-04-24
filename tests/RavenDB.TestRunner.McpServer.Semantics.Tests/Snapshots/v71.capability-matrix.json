@@ -21,6 +21,6 @@
   },
   "versionSensitivePoints": [
     "v7.1 still normalizes xUnit v2-era result metadata.",
-    "AI capabilities are discovered from bounded package and path markers instead of a fixed version threshold."
+    "v7.1 locks transitional AI test semantics while workspace line detection remains bounded and evidence-driven."
   ]
 }

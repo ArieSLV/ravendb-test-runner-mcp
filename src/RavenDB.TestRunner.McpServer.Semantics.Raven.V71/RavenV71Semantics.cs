@@ -18,16 +18,16 @@ public sealed class RavenV71Semantics : RavenSemanticsPluginBase
             runnerFamily: "xunit.v2",
             adapterFamily: "xunit.runner.visualstudio",
             supportsSlowTestsIssuesProject: inspection.HasSlowTestsIssuesProject,
-            supportsAiEmbeddingsSemantics: inspection.HasAiEmbeddingsMarkers,
-            supportsAiConnectionStrings: inspection.HasAiConnectionStringMarkers,
-            supportsAiAgentsSemantics: inspection.HasAiAgentMarkers,
-            supportsAiTestAttributes: inspection.HasAiTestAttributeMarkers || inspection.HasAnyAiMarkers,
+            supportsAiEmbeddingsSemantics: true,
+            supportsAiConnectionStrings: true,
+            supportsAiAgentsSemantics: true,
+            supportsAiTestAttributes: true,
             supportsXunitV3SourceInfo: false,
             supportsBuildGraphSpecialCases: false,
             versionSensitivePoints:
             [
                 "v7.1 still normalizes xUnit v2-era result metadata.",
-                "AI capabilities are discovered from bounded package and path markers instead of a fixed version threshold."
+                "v7.1 locks transitional AI test semantics while workspace line detection remains bounded and evidence-driven."
             ]);
     }
 

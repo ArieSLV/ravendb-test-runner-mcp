@@ -8,7 +8,7 @@ namespace RavenDB.TestRunner.McpServer.Semantics.Tests;
 
 internal static class Program
 {
-    private const int ValidationCount = 6;
+    private const int ValidationCount = 7;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -32,6 +32,7 @@ internal static class Program
 
         RunValidation(failures, "v6.2 fixture detection and snapshot", ValidateV62Fixture);
         RunValidation(failures, "v7.1 fixture detection and snapshot", ValidateV71Fixture);
+        RunValidation(failures, "v7.1 transitional baseline without AI markers", ValidateV71TransitionalBaselineWithoutAiMarkers);
         RunValidation(failures, "v7.2 fixture detection and snapshot", ValidateV72Fixture);
         RunValidation(failures, "result normalization contracts match capability routing", ValidateResultNormalizationContracts);
         RunValidation(failures, "richer evidence overrides a conflicting branch line", ValidateConflictingBranchEvidence);
@@ -104,10 +105,32 @@ internal static class Program
             "v71.capability-matrix.json");
 
         EnsureEqual("xunit.v2", capabilityMatrix.FrameworkFamily, "v7.1 framework family");
+        EnsureEqual("xunit.v2", capabilityMatrix.RunnerFamily, "v7.1 runner family");
+        EnsureEqual("xunit.runner.visualstudio", capabilityMatrix.AdapterFamily, "v7.1 adapter family");
         Ensure(capabilityMatrix.SupportsAiEmbeddingsSemantics, "v7.1 should surface AI embeddings from the fixture.");
         Ensure(capabilityMatrix.SupportsAiConnectionStrings, "v7.1 should surface AI connection strings from the fixture.");
         Ensure(capabilityMatrix.SupportsAiAgentsSemantics, "v7.1 should surface AI agent markers from the fixture.");
+        Ensure(capabilityMatrix.SupportsAiTestAttributes, "v7.1 should surface AI test attributes from the fixture.");
         Ensure(capabilityMatrix.SupportsXunitV3SourceInfo is false, "v7.1 must remain on xUnit v2 metadata.");
+    }
+
+    private static void ValidateV71TransitionalBaselineWithoutAiMarkers()
+    {
+        using var fixture = WorkspaceFixture.CreateV71WithoutAiMarkers();
+        var inspection = WorkspaceInspector.Scan(fixture.RootPath);
+        Ensure(inspection.HasAnyAiMarkers is false, "v7.1 no-marker fixture should not contain AI path markers.");
+
+        var detection = Detector.Detect(inspection);
+        EnsureEqual(RepoLines.V71, detection.RepoLine, "v7.1 no-marker fixture detection");
+        EnsureEqual(RavenV71Semantics.SemanticPluginId, detection.PluginId, "v7.1 no-marker plugin selection");
+        Ensure(detection.IsAmbiguous is false, "v7.1 no-marker fixture should be decisive from branch and xUnit v2 evidence.");
+
+        var capabilityMatrix = Router.Route(RepoLines.V71).GetCapabilityMatrix(inspection);
+        Ensure(capabilityMatrix.SupportsAiEmbeddingsSemantics, "v7.1 transitional AI embeddings baseline should be locked.");
+        Ensure(capabilityMatrix.SupportsAiConnectionStrings, "v7.1 transitional AI connection strings baseline should be locked.");
+        Ensure(capabilityMatrix.SupportsAiAgentsSemantics, "v7.1 transitional AI agents baseline should be locked.");
+        Ensure(capabilityMatrix.SupportsAiTestAttributes, "v7.1 transitional AI test attributes baseline should be locked.");
+        Ensure(capabilityMatrix.SupportsXunitV3SourceInfo is false, "v7.1 transitional baseline must not claim xUnit v3 source info.");
     }
 
     private static void ValidateV72Fixture()
