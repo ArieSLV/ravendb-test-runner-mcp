@@ -8,7 +8,7 @@ namespace RavenDB.TestRunner.McpServer.Semantics.Tests;
 
 internal static class Program
 {
-    private const int ValidationCount = 7;
+    private const int ValidationCount = 8;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -34,6 +34,7 @@ internal static class Program
         RunValidation(failures, "v7.1 fixture detection and snapshot", ValidateV71Fixture);
         RunValidation(failures, "v7.1 transitional baseline without AI markers", ValidateV71TransitionalBaselineWithoutAiMarkers);
         RunValidation(failures, "v7.2 fixture detection and snapshot", ValidateV72Fixture);
+        RunValidation(failures, "v7.2 modern baseline without AI markers", ValidateV72ModernBaselineWithoutAiMarkers);
         RunValidation(failures, "result normalization contracts match capability routing", ValidateResultNormalizationContracts);
         RunValidation(failures, "richer evidence overrides a conflicting branch line", ValidateConflictingBranchEvidence);
         RunValidation(failures, "bounded scan truncation is deterministic and ambiguity-aware", ValidateDeterministicTruncation);
@@ -143,10 +144,35 @@ internal static class Program
             "v72.capability-matrix.json");
 
         EnsureEqual("xunit.v3", capabilityMatrix.FrameworkFamily, "v7.2 framework family");
+        EnsureEqual("xunit.v3", capabilityMatrix.RunnerFamily, "v7.2 runner family");
+        EnsureEqual("xunit.v3", capabilityMatrix.AdapterFamily, "v7.2 adapter family");
         Ensure(capabilityMatrix.SupportsAiEmbeddingsSemantics, "v7.2 should surface AI embeddings from the fixture.");
+        Ensure(capabilityMatrix.SupportsAiConnectionStrings, "v7.2 should surface AI connection strings from the fixture.");
         Ensure(capabilityMatrix.SupportsAiAgentsSemantics, "v7.2 should surface AI agent markers from the fixture.");
+        Ensure(capabilityMatrix.SupportsAiTestAttributes, "v7.2 should surface AI test attributes from the fixture.");
         Ensure(capabilityMatrix.SupportsXunitV3SourceInfo, "v7.2 must claim xUnit v3 source info.");
         Ensure(capabilityMatrix.SupportsSlowTestsIssuesProject is false, "v7.2 fixture intentionally omits SlowTests/Issues support.");
+    }
+
+    private static void ValidateV72ModernBaselineWithoutAiMarkers()
+    {
+        using var fixture = WorkspaceFixture.CreateV72WithoutAiMarkers();
+        var inspection = WorkspaceInspector.Scan(fixture.RootPath);
+        Ensure(inspection.HasAnyAiMarkers is false, "v7.2 no-marker fixture should not contain AI path markers.");
+
+        var detection = Detector.Detect(inspection);
+        EnsureEqual(RepoLines.V72, detection.RepoLine, "v7.2 no-marker fixture detection");
+        EnsureEqual(RavenV72Semantics.SemanticPluginId, detection.PluginId, "v7.2 no-marker plugin selection");
+        Ensure(detection.IsAmbiguous is false, "v7.2 no-marker fixture should be decisive from branch and xUnit v3 evidence.");
+
+        var capabilityMatrix = Router.Route(RepoLines.V72).GetCapabilityMatrix(inspection);
+        EnsureEqual("xunit.v3", capabilityMatrix.FrameworkFamily, "v7.2 no-marker framework family");
+        Ensure(capabilityMatrix.SupportsAiEmbeddingsSemantics, "v7.2 modern AI embeddings baseline should be locked.");
+        Ensure(capabilityMatrix.SupportsAiConnectionStrings, "v7.2 modern AI connection strings baseline should be locked.");
+        Ensure(capabilityMatrix.SupportsAiAgentsSemantics, "v7.2 modern AI agents baseline should be locked.");
+        Ensure(capabilityMatrix.SupportsAiTestAttributes, "v7.2 modern AI test attributes baseline should be locked.");
+        Ensure(capabilityMatrix.SupportsXunitV3SourceInfo, "v7.2 modern baseline must claim xUnit v3 source info.");
+        Ensure(capabilityMatrix.SupportsSlowTestsIssuesProject is false, "v7.2 no-marker fixture intentionally omits SlowTests/Issues support.");
     }
 
     private static void ValidateConflictingBranchEvidence()
@@ -189,6 +215,20 @@ internal static class Program
         EnsureEqual(supportsXunitV3SourceInfo, hints.SupportsXunitV3SourceInfo, $"{repoLine} expected source-info capability");
         Ensure(hints.StableIdentityFields.Count > 0, $"{repoLine} normalization should publish stable identity fields.");
         Ensure(hints.VersionSensitivePoints.Count > 0, $"{repoLine} normalization should publish version-sensitive points.");
+
+        if (supportsXunitV3SourceInfo)
+        {
+            EnsureEqual("xunit.v3.source-info", hints.SourceInfoMode, $"{repoLine} xUnit v3 source-info mode");
+            Ensure(hints.StableIdentityFields.Contains("xunitUniqueId", StringComparer.Ordinal), $"{repoLine} xUnit v3 normalization should publish xUnit unique ids.");
+            Ensure(hints.StableIdentityFields.Contains("sourceFilePath", StringComparer.Ordinal), $"{repoLine} xUnit v3 normalization should publish source file paths.");
+            Ensure(hints.StableIdentityFields.Contains("sourceLineNumber", StringComparer.Ordinal), $"{repoLine} xUnit v3 normalization should publish source line numbers.");
+        }
+        else
+        {
+            EnsureEqual("xunit.v2.metadata", hints.SourceInfoMode, $"{repoLine} xUnit v2 metadata mode");
+            Ensure(hints.StableIdentityFields.Contains("sourceFilePath", StringComparer.Ordinal) is false, $"{repoLine} xUnit v2 normalization should not publish source file paths as stable identity.");
+            Ensure(hints.StableIdentityFields.Contains("sourceLineNumber", StringComparer.Ordinal) is false, $"{repoLine} xUnit v2 normalization should not publish source line numbers as stable identity.");
+        }
     }
 
     private static void ValidateDeterministicTruncation()

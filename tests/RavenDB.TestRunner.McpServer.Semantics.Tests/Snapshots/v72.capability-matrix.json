@@ -21,6 +21,6 @@
   },
   "versionSensitivePoints": [
     "v7.2 assumes xUnit v3-era source metadata is available.",
-    "AI capabilities stay marker-driven even though v7.2 is the confirmed AI-capable baseline."
+    "v7.2 locks the modern AI-capable semantic baseline while workspace line detection remains bounded and evidence-driven."
   ]
 }

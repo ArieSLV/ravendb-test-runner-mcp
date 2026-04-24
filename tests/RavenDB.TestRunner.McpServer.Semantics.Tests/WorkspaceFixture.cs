@@ -97,7 +97,27 @@ internal sealed class WorkspaceFixture : IDisposable
     {
         var fixture = Create("v72");
         fixture.WriteCommonGitMetadata("v7.2");
-        fixture.WriteFile(
+        fixture.WriteV72XunitV3Baseline("test/FastTests/AI/FastTests.AI.csproj");
+        fixture.WriteFile("test/FastTests/AI/Embeddings/AiEmbeddingsTests.cs", "namespace FastTests.AI.Embeddings; public sealed class AiEmbeddingsTests;");
+        fixture.WriteFile("src/Raven.Server/Documents/AI/ConnectionStrings/AiConnectionStrings.cs", "namespace Raven.Server.Documents.AI.ConnectionStrings; public sealed class AiConnectionStrings;");
+        fixture.WriteFile("src/Raven.Server/Documents/AI/Agents/AiAgentFactAttribute.cs", "namespace Raven.Server.Documents.AI.Agents; public sealed class AiAgentFactAttribute;");
+
+        return fixture;
+    }
+
+    public static WorkspaceFixture CreateV72WithoutAiMarkers()
+    {
+        var fixture = Create("v72-no-ai-markers");
+        fixture.WriteCommonGitMetadata("v7.2");
+        fixture.WriteV72XunitV3Baseline("test/FastTests/Cluster/FastTests.Cluster.csproj");
+        fixture.WriteFile("test/FastTests/Cluster/RaftTests.cs", "namespace FastTests.Cluster; public sealed class RaftTests;");
+
+        return fixture;
+    }
+
+    private void WriteV72XunitV3Baseline(string testProjectPath)
+    {
+        WriteFile(
             "Directory.Packages.props",
             """
             <Project>
@@ -107,8 +127,8 @@ internal sealed class WorkspaceFixture : IDisposable
               </ItemGroup>
             </Project>
             """);
-        fixture.WriteFile(
-            "test/FastTests/AI/FastTests.AI.csproj",
+        WriteFile(
+            testProjectPath,
             """
             <Project Sdk="Microsoft.NET.Sdk">
               <ItemGroup>
@@ -117,11 +137,6 @@ internal sealed class WorkspaceFixture : IDisposable
               </ItemGroup>
             </Project>
             """);
-        fixture.WriteFile("test/FastTests/AI/Embeddings/AiEmbeddingsTests.cs", "namespace FastTests.AI.Embeddings; public sealed class AiEmbeddingsTests;");
-        fixture.WriteFile("src/Raven.Server/Documents/AI/ConnectionStrings/AiConnectionStrings.cs", "namespace Raven.Server.Documents.AI.ConnectionStrings; public sealed class AiConnectionStrings;");
-        fixture.WriteFile("src/Raven.Server/Documents/AI/Agents/AiAgentFactAttribute.cs", "namespace Raven.Server.Documents.AI.Agents; public sealed class AiAgentFactAttribute;");
-
-        return fixture;
     }
 
     public static WorkspaceFixture CreateConflictingBranchEvidence()

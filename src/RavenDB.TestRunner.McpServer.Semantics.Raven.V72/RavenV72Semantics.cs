@@ -18,16 +18,16 @@ public sealed class RavenV72Semantics : RavenSemanticsPluginBase
             runnerFamily: "xunit.v3",
             adapterFamily: "xunit.v3",
             supportsSlowTestsIssuesProject: inspection.HasSlowTestsIssuesProject,
-            supportsAiEmbeddingsSemantics: inspection.HasAiEmbeddingsMarkers,
-            supportsAiConnectionStrings: inspection.HasAiConnectionStringMarkers,
-            supportsAiAgentsSemantics: inspection.HasAiAgentMarkers,
-            supportsAiTestAttributes: inspection.HasAiTestAttributeMarkers || inspection.HasAnyAiMarkers,
+            supportsAiEmbeddingsSemantics: true,
+            supportsAiConnectionStrings: true,
+            supportsAiAgentsSemantics: true,
+            supportsAiTestAttributes: true,
             supportsXunitV3SourceInfo: true,
             supportsBuildGraphSpecialCases: false,
             versionSensitivePoints:
             [
                 "v7.2 assumes xUnit v3-era source metadata is available.",
-                "AI capabilities stay marker-driven even though v7.2 is the confirmed AI-capable baseline."
+                "v7.2 locks the modern AI-capable semantic baseline while workspace line detection remains bounded and evidence-driven."
             ]);
     }
 
