@@ -27,6 +27,8 @@ public sealed class RavenArtifactAttachmentStore
         string artifactId = string.IsNullOrWhiteSpace(request.ArtifactId)
             ? CreateArtifactId(request)
             : request.ArtifactId;
+        ValidateArtifactId(request, artifactId);
+
         string sha256 = ComputeSha256(request.Payload);
         bool exceedsGuardrail = request.Payload.LongLength > options.PracticalAttachmentGuardrailBytes;
         bool storeAsAttachment = route.IsAttachmentBackedInV1 && exceedsGuardrail is false;
@@ -102,6 +104,30 @@ public sealed class RavenArtifactAttachmentStore
         ArgumentException.ThrowIfNullOrWhiteSpace(request.ContentType);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.RetentionClass);
         ArgumentNullException.ThrowIfNull(request.Payload);
+
+        if (ArtifactOwnerKinds.All.Contains(request.OwnerKind, StringComparer.Ordinal) is false)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(request.OwnerKind),
+                request.OwnerKind,
+                "Artifact owner kind must be one of the frozen artifact owner kinds.");
+        }
+
+        if (ArtifactRetentionClasses.All.Contains(request.RetentionClass, StringComparer.Ordinal) is false)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(request.RetentionClass),
+                request.RetentionClass,
+                "Artifact retention class must be one of the frozen artifact retention classes.");
+        }
+
+        string normalizedOwnerId = NormalizeDocumentIdSegment(request.OwnerId);
+        if (string.Equals(request.OwnerId, normalizedOwnerId, StringComparison.Ordinal) is false)
+        {
+            throw new ArgumentException("Artifact owner ID must already be a normalized slash-separated document ID.", nameof(request.OwnerId));
+        }
+
+        ValidatePathSegments(normalizedOwnerId.Split('/', StringSplitOptions.None), nameof(request.OwnerId));
     }
 
     private static string CreateArtifactId(ArtifactWriteRequest request)
@@ -113,6 +139,68 @@ public sealed class RavenArtifactAttachmentStore
             NormalizeDocumentIdSegment(request.OwnerId),
             NormalizeDocumentIdSegment(request.ArtifactKind),
             Guid.NewGuid().ToString("N"));
+    }
+
+    private static void ValidateArtifactId(ArtifactWriteRequest request, string artifactId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
+
+        if (artifactId.Contains('\\', StringComparison.Ordinal))
+        {
+            throw new ArgumentException("Artifact ID must not contain backslashes.", nameof(request.ArtifactId));
+        }
+
+        string[] segments = artifactId.Split('/', StringSplitOptions.None);
+        ValidatePathSegments(segments, nameof(request.ArtifactId));
+
+        if (segments.Length < 5)
+        {
+            throw new ArgumentException("Artifact ID must follow artifacts/<owner-kind>/<owner-id>/<kind>/<id>.", nameof(request.ArtifactId));
+        }
+
+        if (string.Equals(segments[0], "artifacts", StringComparison.Ordinal) is false)
+        {
+            throw new ArgumentException("Artifact ID must start with 'artifacts/'.", nameof(request.ArtifactId));
+        }
+
+        if (string.Equals(segments[1], NormalizeDocumentIdSegment(request.OwnerKind), StringComparison.Ordinal) is false)
+        {
+            throw new ArgumentException("Artifact ID owner kind segment must match the request owner kind.", nameof(request.ArtifactId));
+        }
+
+        string artifactKindSegment = segments[^2];
+        if (string.Equals(artifactKindSegment, NormalizeDocumentIdSegment(request.ArtifactKind), StringComparison.Ordinal) is false)
+        {
+            throw new ArgumentException("Artifact ID artifact kind segment must match the request artifact kind.", nameof(request.ArtifactId));
+        }
+
+        string ownerIdPath = string.Join('/', segments[2..^2]);
+        if (string.Equals(ownerIdPath, NormalizeDocumentIdSegment(request.OwnerId), StringComparison.Ordinal) is false)
+        {
+            throw new ArgumentException("Artifact ID owner ID path must match the request owner ID.", nameof(request.ArtifactId));
+        }
+    }
+
+    private static void ValidatePathSegments(IReadOnlyList<string> segments, string parameterName)
+    {
+        if (segments.Count == 0)
+        {
+            throw new ArgumentException("Path must contain at least one segment.", parameterName);
+        }
+
+        foreach (string segment in segments)
+        {
+            if (string.IsNullOrWhiteSpace(segment))
+            {
+                throw new ArgumentException("Path must not contain empty segments.", parameterName);
+            }
+
+            if (string.Equals(segment, ".", StringComparison.Ordinal) ||
+                string.Equals(segment, "..", StringComparison.Ordinal))
+            {
+                throw new ArgumentException("Path must not contain traversal segments.", parameterName);
+            }
+        }
     }
 
     private static string NormalizeDocumentIdSegment(string segment)

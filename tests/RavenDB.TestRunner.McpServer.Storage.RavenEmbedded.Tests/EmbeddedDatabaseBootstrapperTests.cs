@@ -35,6 +35,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             AssertStorageSchemaBaseline(result);
             AssertStaticIndexesQueryPascalCaseProbeDocuments(result);
             AssertArtifactMetadataAndAttachmentPersistence(result);
+            AssertArtifactIdentityValidation(result);
 
             string documentId = "artifact-ref-probes/" + Guid.NewGuid().ToString("N");
 
@@ -337,7 +338,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             PreviewAvailable: true,
             Sensitive: true,
             CreatedAtUtc: createdAtUtc,
-            ArtifactId: "artifacts/build/" + suffix + "/build.stdout/" + suffix));
+            ArtifactId: CreateArtifactId(ArtifactOwnerKinds.Build, buildId, ArtifactKindCatalog.BuildStdout, suffix)));
 
         Assert.Equal(ArtifactStorageKinds.RavenAttachment, attachmentResult.StorageKind);
         Assert.True(attachmentResult.IsAttachmentBackedInV1);
@@ -355,7 +356,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             ArtifactRetentionClasses.Diagnostic,
             AttachmentName: "dump.dmp",
             CreatedAtUtc: createdAtUtc,
-            ArtifactId: "artifacts/build/" + suffix + "/build.dump/" + suffix));
+            ArtifactId: CreateArtifactId(ArtifactOwnerKinds.Build, buildId, ArtifactKindCatalog.BuildDump, suffix)));
 
         Assert.Equal(ArtifactStorageKinds.DeferredExternal, deferredResult.StorageKind);
         Assert.False(deferredResult.IsAttachmentBackedInV1);
@@ -372,7 +373,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             ArtifactRetentionClasses.Diagnostic,
             AttachmentName: "merged.log",
             CreatedAtUtc: createdAtUtc,
-            ArtifactId: "artifacts/build/" + suffix + "/build.merged/" + suffix));
+            ArtifactId: CreateArtifactId(ArtifactOwnerKinds.Build, buildId, ArtifactKindCatalog.BuildMerged, suffix)));
 
         Assert.Equal(ArtifactStorageKinds.DeferredExternal, oversizedResult.StorageKind);
         Assert.False(oversizedResult.IsAttachmentBackedInV1);
@@ -456,6 +457,135 @@ public sealed class EmbeddedDatabaseBootstrapperTests
 
             Assert.Contains(kindMatches, match => match.ArtifactId == attachmentResult.ArtifactId);
         }
+    }
+
+    private static void AssertArtifactIdentityValidation(EmbeddedDatabaseBootstrapResult result)
+    {
+        string suffix = Guid.NewGuid().ToString("N");
+        string ownerId = "builds/workspace-" + suffix + "/2026-04-24/" + suffix;
+        var artifactStore = new RavenArtifactAttachmentStore(result.Store);
+        string canonicalArtifactId = CreateArtifactId(
+            ArtifactOwnerKinds.Build,
+            ownerId,
+            ArtifactKindCatalog.BuildSummary,
+            suffix);
+
+        ArtifactPersistenceResult persisted = artifactStore.Store(CreateArtifactWriteRequest(
+            ownerId,
+            ArtifactKindCatalog.BuildSummary,
+            ArtifactRetentionClasses.Standard,
+            canonicalArtifactId));
+
+        Assert.Equal(canonicalArtifactId, persisted.ArtifactId);
+        Assert.Equal(ArtifactStorageKinds.RavenAttachment, persisted.StorageKind);
+
+        ArtifactPersistenceResult generated = artifactStore.Store(new(
+            ArtifactOwnerKinds.Build,
+            ownerId,
+            ArtifactKindCatalog.BuildCommand,
+            Encoding.UTF8.GetBytes("generated id payload " + suffix),
+            "text/plain",
+            ArtifactRetentionClasses.Ephemeral,
+            AttachmentName: "command.txt"));
+
+        Assert.StartsWith(
+            "artifacts/" + ArtifactOwnerKinds.Build + "/" + ownerId + "/" + ArtifactKindCatalog.BuildCommand + "/",
+            generated.ArtifactId,
+            StringComparison.Ordinal);
+        Assert.Equal(ArtifactStorageKinds.RavenAttachment, generated.StorageKind);
+
+        using (var verificationSession = result.Store.OpenSession())
+        {
+            ArtifactMetadataDocument metadata =
+                verificationSession.Load<ArtifactMetadataDocument>(canonicalArtifactId);
+            Assert.NotNull(metadata);
+            Assert.Equal(ownerId, metadata.OwnerId);
+            Assert.Equal(ArtifactKindCatalog.BuildSummary, metadata.ArtifactKind);
+            Assert.Equal(ArtifactRetentionClasses.Standard, metadata.RetentionClass);
+            Assert.Single(verificationSession.Advanced.Attachments.GetNames(metadata));
+        }
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => artifactStore.Store(CreateArtifactWriteRequest(
+            ownerId,
+            ArtifactKindCatalog.BuildSummary,
+            ArtifactRetentionClasses.Standard,
+            canonicalArtifactId,
+            ownerKind: "unknown")));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => artifactStore.Store(CreateArtifactWriteRequest(
+            ownerId,
+            ArtifactKindCatalog.BuildSummary,
+            "forever",
+            canonicalArtifactId)));
+
+        Assert.Throws<ArgumentException>(() => artifactStore.Store(CreateArtifactWriteRequest(
+            ownerId,
+            ArtifactKindCatalog.BuildSummary,
+            ArtifactRetentionClasses.Standard,
+            "outside/build/" + ownerId + "/" + ArtifactKindCatalog.BuildSummary + "/" + suffix)));
+
+        Assert.Throws<ArgumentException>(() => artifactStore.Store(CreateArtifactWriteRequest(
+            ownerId,
+            ArtifactKindCatalog.BuildSummary,
+            ArtifactRetentionClasses.Standard,
+            CreateArtifactId(ArtifactOwnerKinds.Run, ownerId, ArtifactKindCatalog.BuildSummary, suffix))));
+
+        Assert.Throws<ArgumentException>(() => artifactStore.Store(CreateArtifactWriteRequest(
+            ownerId,
+            ArtifactKindCatalog.BuildSummary,
+            ArtifactRetentionClasses.Standard,
+            CreateArtifactId(ArtifactOwnerKinds.Build, "runs/" + suffix, ArtifactKindCatalog.BuildSummary, suffix))));
+
+        Assert.Throws<ArgumentException>(() => artifactStore.Store(CreateArtifactWriteRequest(
+            ownerId,
+            ArtifactKindCatalog.BuildSummary,
+            ArtifactRetentionClasses.Standard,
+            CreateArtifactId(ArtifactOwnerKinds.Build, ownerId, ArtifactKindCatalog.RunSummary, suffix))));
+
+        Assert.Throws<ArgumentException>(() => artifactStore.Store(CreateArtifactWriteRequest(
+            ownerId,
+            ArtifactKindCatalog.BuildSummary,
+            ArtifactRetentionClasses.Standard,
+            "artifacts/build/" + ownerId + "/../" + ArtifactKindCatalog.BuildSummary + "/" + suffix)));
+
+        Assert.Throws<ArgumentException>(() => artifactStore.Store(CreateArtifactWriteRequest(
+            ownerId,
+            ArtifactKindCatalog.BuildSummary,
+            ArtifactRetentionClasses.Standard,
+            "artifacts/build/" + ownerId + "//" + ArtifactKindCatalog.BuildSummary + "/" + suffix)));
+
+        Assert.Throws<ArgumentException>(() => artifactStore.Store(CreateArtifactWriteRequest(
+            ownerId,
+            ArtifactKindCatalog.BuildSummary,
+            ArtifactRetentionClasses.Standard,
+            "artifacts\\build\\" + ownerId.Replace('/', '\\') + "\\" + ArtifactKindCatalog.BuildSummary + "\\" + suffix)));
+    }
+
+    private static ArtifactWriteRequest CreateArtifactWriteRequest(
+        string ownerId,
+        string artifactKind,
+        string retentionClass,
+        string artifactId,
+        string ownerKind = ArtifactOwnerKinds.Build)
+    {
+        return new(
+            ownerKind,
+            ownerId,
+            artifactKind,
+            Encoding.UTF8.GetBytes("artifact payload " + artifactId),
+            "text/plain",
+            retentionClass,
+            AttachmentName: "artifact.txt",
+            ArtifactId: artifactId);
+    }
+
+    private static string CreateArtifactId(
+        string ownerKind,
+        string ownerId,
+        string artifactKind,
+        string finalSegment)
+    {
+        return string.Join('/', "artifacts", ownerKind, ownerId, artifactKind, finalSegment);
     }
 
     private static void AssertOptimisticConcurrencyIsEnabled(EmbeddedDatabaseBootstrapResult result)
