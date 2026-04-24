@@ -17,6 +17,12 @@
 - Capability matrices persist repo line, framework/runner/adapter families, capability dictionary, version-sensitive points, plugin ID, workspace ID, and created timestamp.
 - Category catalog entries persist into the frozen `TestCatalogEntries` collection using the frozen `test-catalog/<workspace-hash>/<catalog-version>/<test-id-hash>` ID family with a deterministic hash of the category key as the final entry segment.
 - Store writes are idempotent for already-created immutable snapshot/matrix/category documents.
+- Corrective pass `ef2c67d` hardened immutable ID idempotency:
+  - Re-saving an equivalent semantic snapshot, capability matrix, or category catalog entry succeeds and returns the same IDs.
+  - Reusing the same immutable document ID with different persisted semantic snapshot payload is rejected deterministically.
+  - Reusing the same immutable document ID with different capability matrix payload is rejected deterministically.
+  - Reusing the same immutable document ID with different category catalog payload is rejected deterministically.
+  - Rejections include the immutable document ID and first mismatched canonical persisted field; RavenDB metadata/etags are ignored.
 - Storage identity validation rejects path separators, traversal segments, unsupported repo lines, and mismatched request/capability matrix repo lines.
 
 ## Touched contracts
@@ -47,13 +53,16 @@
 - Targeted storage validation passed:
   `dotnet test .\tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-c-006-review.trx"`
 - Result: 10 storage tests discovered, executed, and passed.
+- Corrective idempotency validation passed:
+  `dotnet test .\tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-c-006-idempotency-corrective.trx"`
+- Result: 10 storage tests discovered, executed, and passed.
 - Semantics harness passed:
   `dotnet run --no-build --project .\tests\RavenDB.TestRunner.McpServer.Semantics.Tests\RavenDB.TestRunner.McpServer.Semantics.Tests.csproj -v minimal`
 - Result: 8 workspace detection and capability checks passed.
 
 ## Progress ledger update
 - Mark `WP_C_006_catalog_persistence_and_capability_matrix` as `Done`.
-- Record implementation commit `d13736d`.
+- Record implementation commit `ef2c67d`.
 - Keep `ENV-001` open.
 - Keep `TASK_INDEX.md` unchanged.
 
