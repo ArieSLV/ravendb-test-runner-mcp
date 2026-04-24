@@ -1,4 +1,5 @@
 using System.Text;
+using System.Security.Cryptography;
 using Raven.Client.Documents.Operations.Indexes;
 using Raven.Client.Exceptions;
 using Raven.Client.ServerWide.Operations;
@@ -33,6 +34,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             Assert.Contains("ArtifactRefs", result.MandatoryCollections, StringComparer.Ordinal);
             AssertStorageSchemaBaseline(result);
             AssertStaticIndexesQueryPascalCaseProbeDocuments(result);
+            AssertArtifactMetadataAndAttachmentPersistence(result);
 
             string documentId = "artifact-ref-probes/" + Guid.NewGuid().ToString("N");
 
@@ -312,6 +314,150 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             $"Index stats: entries={stats.EntriesCount}, mapAttempts={stats.MapAttempts}, mapSuccesses={stats.MapSuccesses}, mapErrors={stats.MapErrors}, state={stats.State}; indexErrors={errors.Length}; firstError={firstError}";
     }
 
+    private static void AssertArtifactMetadataAndAttachmentPersistence(EmbeddedDatabaseBootstrapResult result)
+    {
+        string suffix = Guid.NewGuid().ToString("N");
+        string buildId = "builds/" + suffix;
+        DateTime createdAtUtc = DateTime.UtcNow;
+        byte[] stdoutPayload = Encoding.UTF8.GetBytes("artifact stdout " + suffix);
+        byte[] dumpPayload = Encoding.UTF8.GetBytes("deferred dump " + suffix);
+        byte[] oversizedPayload = Encoding.UTF8.GetBytes(new string('x', 128));
+        var artifactStore = new RavenArtifactAttachmentStore(
+            result.Store,
+            new RavenArtifactAttachmentStoreOptions(64));
+
+        ArtifactPersistenceResult attachmentResult = artifactStore.Store(new(
+            ArtifactOwnerKinds.Build,
+            buildId,
+            ArtifactKindCatalog.BuildStdout,
+            stdoutPayload,
+            "text/plain",
+            ArtifactRetentionClasses.Diagnostic,
+            AttachmentName: "stdout.log",
+            PreviewAvailable: true,
+            Sensitive: true,
+            CreatedAtUtc: createdAtUtc,
+            ArtifactId: "artifacts/build/" + suffix + "/build.stdout/" + suffix));
+
+        Assert.Equal(ArtifactStorageKinds.RavenAttachment, attachmentResult.StorageKind);
+        Assert.True(attachmentResult.IsAttachmentBackedInV1);
+        Assert.False(attachmentResult.IsDeferredByPolicy);
+        Assert.Equal("stdout.log", attachmentResult.AttachmentName);
+        Assert.Null(attachmentResult.DeferredReason);
+        Assert.Equal(ComputeSha256(stdoutPayload), attachmentResult.Sha256);
+
+        ArtifactPersistenceResult deferredResult = artifactStore.Store(new(
+            ArtifactOwnerKinds.Build,
+            buildId,
+            ArtifactKindCatalog.BuildDump,
+            dumpPayload,
+            "application/octet-stream",
+            ArtifactRetentionClasses.Diagnostic,
+            AttachmentName: "dump.dmp",
+            CreatedAtUtc: createdAtUtc,
+            ArtifactId: "artifacts/build/" + suffix + "/build.dump/" + suffix));
+
+        Assert.Equal(ArtifactStorageKinds.DeferredExternal, deferredResult.StorageKind);
+        Assert.False(deferredResult.IsAttachmentBackedInV1);
+        Assert.True(deferredResult.IsDeferredByPolicy);
+        Assert.Null(deferredResult.AttachmentName);
+        Assert.Equal(ArtifactDeferredReasons.DeferredArtifactKind, deferredResult.DeferredReason);
+
+        ArtifactPersistenceResult oversizedResult = artifactStore.Store(new(
+            ArtifactOwnerKinds.Build,
+            buildId,
+            ArtifactKindCatalog.BuildMerged,
+            oversizedPayload,
+            "text/plain",
+            ArtifactRetentionClasses.Diagnostic,
+            AttachmentName: "merged.log",
+            CreatedAtUtc: createdAtUtc,
+            ArtifactId: "artifacts/build/" + suffix + "/build.merged/" + suffix));
+
+        Assert.Equal(ArtifactStorageKinds.DeferredExternal, oversizedResult.StorageKind);
+        Assert.False(oversizedResult.IsAttachmentBackedInV1);
+        Assert.True(oversizedResult.IsDeferredByPolicy);
+        Assert.Null(oversizedResult.AttachmentName);
+        Assert.Equal(ArtifactDeferredReasons.ExceedsPracticalAttachmentGuardrail, oversizedResult.DeferredReason);
+
+        using (var verificationSession = result.Store.OpenSession())
+        {
+            ArtifactMetadataDocument attachmentMetadata =
+                verificationSession.Load<ArtifactMetadataDocument>(attachmentResult.ArtifactId);
+            Assert.NotNull(attachmentMetadata);
+            Assert.Equal(DocumentCollectionNames.ArtifactRefs, verificationSession.Advanced.GetMetadataFor(attachmentMetadata)["@collection"]?.ToString());
+            Assert.Equal(attachmentResult.ArtifactId, attachmentMetadata.ArtifactId);
+            Assert.Equal(ArtifactOwnerKinds.Build, attachmentMetadata.OwnerKind);
+            Assert.Equal(buildId, attachmentMetadata.OwnerId);
+            Assert.Equal(ArtifactKindCatalog.BuildStdout, attachmentMetadata.ArtifactKind);
+            Assert.Equal(ArtifactStorageKinds.RavenAttachment, attachmentMetadata.StorageKind);
+            Assert.Equal("stdout.log", attachmentMetadata.AttachmentName);
+            Assert.Equal(stdoutPayload.Length, attachmentMetadata.SizeBytes);
+            Assert.Equal(ComputeSha256(stdoutPayload), attachmentMetadata.Sha256);
+            Assert.Equal("text/plain", attachmentMetadata.ContentType);
+            Assert.Equal(ArtifactRetentionClasses.Diagnostic, attachmentMetadata.RetentionClass);
+            Assert.True(attachmentMetadata.PreviewAvailable);
+            Assert.True(attachmentMetadata.Sensitive);
+            Assert.Null(attachmentMetadata.DeferredReason);
+
+            var attachmentNames = verificationSession.Advanced.Attachments.GetNames(attachmentMetadata);
+            Assert.Single(attachmentNames);
+            Assert.Equal("stdout.log", attachmentNames[0].Name);
+
+            using var attachment = verificationSession.Advanced.Attachments.Get(attachmentResult.ArtifactId, "stdout.log");
+            Assert.NotNull(attachment);
+            using var attachmentCopy = new MemoryStream();
+            attachment.Stream.CopyTo(attachmentCopy);
+            Assert.Equal(stdoutPayload, attachmentCopy.ToArray());
+
+            ArtifactMetadataDocument deferredMetadata =
+                verificationSession.Load<ArtifactMetadataDocument>(deferredResult.ArtifactId);
+            Assert.NotNull(deferredMetadata);
+            Assert.Equal(ArtifactStorageKinds.DeferredExternal, deferredMetadata.StorageKind);
+            Assert.Null(deferredMetadata.AttachmentName);
+            Assert.Equal(ArtifactDeferredReasons.DeferredArtifactKind, deferredMetadata.DeferredReason);
+            Assert.Empty(verificationSession.Advanced.Attachments.GetNames(deferredMetadata));
+
+            ArtifactMetadataDocument oversizedMetadata =
+                verificationSession.Load<ArtifactMetadataDocument>(oversizedResult.ArtifactId);
+            Assert.NotNull(oversizedMetadata);
+            Assert.Equal(ArtifactStorageKinds.DeferredExternal, oversizedMetadata.StorageKind);
+            Assert.Null(oversizedMetadata.AttachmentName);
+            Assert.Equal(ArtifactDeferredReasons.ExceedsPracticalAttachmentGuardrail, oversizedMetadata.DeferredReason);
+            Assert.Empty(verificationSession.Advanced.Attachments.GetNames(oversizedMetadata));
+        }
+
+        using (var querySession = result.Store.OpenSession())
+        {
+            var ownerMatches = querySession.Advanced
+                .DocumentQuery<ArtifactMetadataDocument>(indexName: "ArtifactRefs/ByOwner")
+                .WaitForNonStaleResults(TimeSpan.FromSeconds(30))
+                .WhereEquals("ownerKind", ArtifactOwnerKinds.Build)
+                .AndAlso()
+                .WhereEquals("ownerId", buildId)
+                .ToList();
+
+            Assert.Equal(
+                new[]
+                {
+                    attachmentResult.ArtifactId,
+                    deferredResult.ArtifactId,
+                    oversizedResult.ArtifactId
+                }.OrderBy(id => id, StringComparer.Ordinal),
+                ownerMatches.Select(match => match.ArtifactId).OrderBy(id => id, StringComparer.Ordinal));
+
+            var kindMatches = querySession.Advanced
+                .DocumentQuery<ArtifactMetadataDocument>(indexName: "ArtifactRefs/ByKindCreatedAtRetentionClass")
+                .WaitForNonStaleResults(TimeSpan.FromSeconds(30))
+                .WhereEquals("artifactKind", ArtifactKindCatalog.BuildStdout)
+                .AndAlso()
+                .WhereEquals("retentionClass", ArtifactRetentionClasses.Diagnostic)
+                .ToList();
+
+            Assert.Contains(kindMatches, match => match.ArtifactId == attachmentResult.ArtifactId);
+        }
+    }
+
     private static void AssertOptimisticConcurrencyIsEnabled(EmbeddedDatabaseBootstrapResult result)
     {
         string documentId = "concurrency-probes/" + Guid.NewGuid().ToString("N");
@@ -463,5 +609,10 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             LicensePath: null);
 
         return EmbeddedServerConfiguration.From(options, resolvedLicense);
+    }
+
+    private static string ComputeSha256(byte[] payload)
+    {
+        return Convert.ToHexString(SHA256.HashData(payload)).ToLowerInvariant();
     }
 }
