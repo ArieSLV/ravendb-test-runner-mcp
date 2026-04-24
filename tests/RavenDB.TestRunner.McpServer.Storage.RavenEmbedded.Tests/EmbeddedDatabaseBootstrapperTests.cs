@@ -1083,6 +1083,61 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             Assert.Equal(v72.SemanticSnapshotId, matches[0].SemanticSnapshotId);
         }
 
+        SemanticCatalogPersistenceRequest orderedVersionPointsRequest = CreateSemanticCatalogRequest(
+            workspaceId,
+            "RavenV72Semantics",
+            RepoLines.V72,
+            "sem-v72-version-points-" + suffix,
+            "matrix-v72-version-points-" + suffix,
+            "catalog-v72-version-points-" + suffix,
+            createdAtUtc,
+            CreateCapabilityMatrix(
+                RepoLines.V72,
+                "xunit.v3",
+                supportsAi: true,
+                supportsXunitV3SourceInfo: true,
+                ["zeta version point", "alpha version point"]),
+            categories);
+        SemanticCatalogPersistenceRequest reorderedVersionPointsRequest = CreateSemanticCatalogRequest(
+            workspaceId,
+            "RavenV72Semantics",
+            RepoLines.V72,
+            "sem-v72-version-points-" + suffix,
+            "matrix-v72-version-points-" + suffix,
+            "catalog-v72-version-points-" + suffix,
+            createdAtUtc,
+            CreateCapabilityMatrix(
+                RepoLines.V72,
+                "xunit.v3",
+                supportsAi: true,
+                supportsXunitV3SourceInfo: true,
+                ["alpha version point", "zeta version point"]),
+            categories);
+        SemanticCatalogPersistenceResult orderedVersionPoints = catalogStore.Save(orderedVersionPointsRequest);
+        SemanticCatalogPersistenceResult reorderedVersionPoints = catalogStore.Save(reorderedVersionPointsRequest);
+        CapabilityMatrixDocument? versionPointsMatrix = catalogStore.LoadCapabilityMatrix(orderedVersionPoints.CapabilityMatrixId);
+        Assert.NotNull(versionPointsMatrix);
+        Assert.Equal(new[] { "alpha version point", "zeta version point" }, versionPointsMatrix.VersionSensitivePoints);
+        Assert.Equal(orderedVersionPoints.SemanticSnapshotId, reorderedVersionPoints.SemanticSnapshotId);
+        Assert.Equal(orderedVersionPoints.CapabilityMatrixId, reorderedVersionPoints.CapabilityMatrixId);
+        Assert.Equal(orderedVersionPoints.CategoryCatalogEntryIds, reorderedVersionPoints.CategoryCatalogEntryIds);
+
+        Assert.Throws<InvalidOperationException>(() => catalogStore.Save(CreateSemanticCatalogRequest(
+            workspaceId,
+            "RavenV72Semantics",
+            RepoLines.V72,
+            "sem-v72-version-points-drift-" + suffix,
+            "matrix-v72-version-points-" + suffix,
+            "catalog-v72-version-points-drift-" + suffix,
+            createdAtUtc,
+            CreateCapabilityMatrix(
+                RepoLines.V72,
+                "xunit.v3",
+                supportsAi: true,
+                supportsXunitV3SourceInfo: true,
+                ["alpha version point", "different version point"]),
+            categories)));
+
         Assert.Throws<ArgumentException>(() => catalogStore.Save(CreateSemanticCatalogRequest(
             "bad/workspace",
             "RavenV72Semantics",
@@ -1209,7 +1264,8 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         string repoLine,
         string frameworkFamily,
         bool supportsAi,
-        bool supportsXunitV3SourceInfo)
+        bool supportsXunitV3SourceInfo,
+        IReadOnlyList<string>? versionSensitivePoints = null)
     {
         return new(
             repoLine,
@@ -1223,10 +1279,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             supportsAiTestAttributes: supportsAi,
             supportsXunitV3SourceInfo,
             supportsBuildGraphSpecialCases: false,
-            versionSensitivePoints:
-            [
-                repoLine + " persisted capability matrix baseline."
-            ]);
+            versionSensitivePoints ?? [repoLine + " persisted capability matrix baseline."]);
     }
 
     private static void AssertOptimisticConcurrencyIsEnabled(EmbeddedDatabaseBootstrapResult result)

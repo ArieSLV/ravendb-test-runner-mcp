@@ -57,7 +57,7 @@ public sealed class RavenSemanticCatalogStore
             Capabilities = request.CapabilityMatrix.Capabilities
                 .OrderBy(pair => pair.Key, StringComparer.Ordinal)
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
-            VersionSensitivePoints = request.CapabilityMatrix.VersionSensitivePoints.ToArray(),
+            VersionSensitivePoints = CanonicalizeOrdinalSet(request.CapabilityMatrix.VersionSensitivePoints),
             CreatedAtUtc = createdAtUtc
         };
 
@@ -195,7 +195,7 @@ public sealed class RavenSemanticCatalogStore
             CompareString("runnerFamily", existing.RunnerFamily, requested.RunnerFamily),
             CompareString("adapterFamily", existing.AdapterFamily, requested.AdapterFamily),
             AreEquivalent(existing.Capabilities, requested.Capabilities) ? null : "capabilities",
-            existing.VersionSensitivePoints.SequenceEqual(requested.VersionSensitivePoints, StringComparer.Ordinal) ? null : "versionSensitivePoints",
+            AreEquivalentOrdinalSet(existing.VersionSensitivePoints, requested.VersionSensitivePoints) ? null : "versionSensitivePoints",
             CompareValue("createdAtUtc", NormalizeUtc(existing.CreatedAtUtc), NormalizeUtc(requested.CreatedAtUtc)));
     }
 
@@ -225,6 +225,20 @@ public sealed class RavenSemanticCatalogStore
             .SequenceEqual(
                 requested.OrderBy(pair => pair.Key, StringComparer.Ordinal),
                 KeyValuePairComparer.Instance);
+    }
+
+    private static string[] CanonicalizeOrdinalSet(IEnumerable<string> values)
+    {
+        return values
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static bool AreEquivalentOrdinalSet(
+        IEnumerable<string> existing,
+        IEnumerable<string> requested)
+    {
+        return CanonicalizeOrdinalSet(existing).SequenceEqual(CanonicalizeOrdinalSet(requested), StringComparer.Ordinal);
     }
 
     private sealed class KeyValuePairComparer : IEqualityComparer<KeyValuePair<string, bool>>
