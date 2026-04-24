@@ -66,7 +66,8 @@ public sealed class BuildFingerprintReuseEngineTests
             token,
             token.BuildId,
             OutputsPresent: true,
-            Now));
+            Now,
+            OwnershipResolution: null));
 
         Assert.Equal(BuildReuseDecisionKinds.ReusedExisting, evaluation.Decision.Decision);
         Assert.False(evaluation.Decision.NewBuildRequired);
@@ -90,7 +91,8 @@ public sealed class BuildFingerprintReuseEngineTests
             token,
             token.BuildId,
             OutputsPresent: true,
-            Now));
+            Now,
+            OwnershipResolution: null));
 
         Assert.Equal(BuildReuseDecisionKinds.RebuiltStale, evaluation.Decision.Decision);
         Assert.True(evaluation.Decision.NewBuildRequired);
@@ -115,7 +117,8 @@ public sealed class BuildFingerprintReuseEngineTests
             staleToken,
             staleToken.BuildId,
             OutputsPresent: true,
-            Now));
+            Now,
+            OwnershipResolution: null));
 
         Assert.Equal(BuildReuseDecisionKinds.RebuiltStale, evaluation.Decision.Decision);
         Assert.True(evaluation.Decision.NewBuildRequired);
@@ -139,7 +142,8 @@ public sealed class BuildFingerprintReuseEngineTests
             token,
             token.BuildId,
             OutputsPresent: false,
-            Now));
+            Now,
+            OwnershipResolution: null));
 
         Assert.Equal(BuildReuseDecisionKinds.RejectedExisting, evaluation.Decision.Decision);
         Assert.False(evaluation.Decision.NewBuildRequired);
@@ -163,7 +167,8 @@ public sealed class BuildFingerprintReuseEngineTests
             token,
             token.BuildId,
             OutputsPresent: true,
-            Now));
+            Now,
+            OwnershipResolution: null));
 
         Assert.Equal(BuildReuseDecisionKinds.RebuiltForced, evaluation.Decision.Decision);
         Assert.True(evaluation.Decision.NewBuildRequired);
@@ -213,13 +218,85 @@ public sealed class BuildFingerprintReuseEngineTests
             token,
             token.BuildId,
             OutputsPresent: true,
-            Now));
+            Now,
+            OwnershipResolution: null));
 
         Assert.Equal(BuildReuseDecisionKinds.RebuiltStale, evaluation.Decision.Decision);
         Assert.True(evaluation.Decision.NewBuildRequired);
         Assert.Contains(BuildReuseReasonCodes.ReadinessExpired, evaluation.Decision.ReasonCodes);
         Assert.NotNull(evaluation.ReadinessInvalidation);
         Assert.Equal(BuildReadinessTokenStatuses.Invalidated, evaluation.ReadinessInvalidation.NewStatus);
+    }
+
+    [Fact]
+    public void ExpertSkipBuild_IsRejectedWhenOwnershipResolutionIsMissing()
+    {
+        BuildReuseEngine engine = new();
+        BuildFingerprint fingerprint = CreateFingerprint();
+
+        BuildReuseEvaluation evaluation = engine.Evaluate(new(
+            CreatePolicy(BuildPolicyModes.ExpertSkipBuild),
+            fingerprint,
+            ExistingFingerprint: null,
+            ExistingReadinessToken: null,
+            ExistingBuildId: null,
+            OutputsPresent: false,
+            NowUtc: Now,
+            OwnershipResolution: null));
+
+        Assert.Equal(BuildReuseDecisionKinds.RejectedExisting, evaluation.Decision.Decision);
+        Assert.False(evaluation.Decision.NewBuildRequired);
+        Assert.Contains(BuildPolicyReasonCodes.ExpertModeRequired, evaluation.Decision.ReasonCodes);
+        Assert.DoesNotContain(BuildReuseReasonCodes.ExpertSkipBuild, evaluation.Decision.ReasonCodes);
+    }
+
+    [Fact]
+    public void ExpertSkipBuild_IsRejectedWhenOwnershipResolutionRejectedMissingExpertMode()
+    {
+        BuildReuseEngine engine = new();
+        BuildPolicy policy = CreatePolicy(BuildPolicyModes.ExpertSkipBuild);
+        BuildDependencyResolution ownershipResolution = ResolveExpertSkipOwnership(policy, expertMode: false);
+
+        BuildReuseEvaluation evaluation = engine.Evaluate(new(
+            policy,
+            CreateFingerprint(),
+            ExistingFingerprint: null,
+            ExistingReadinessToken: null,
+            ExistingBuildId: null,
+            OutputsPresent: false,
+            NowUtc: Now,
+            OwnershipResolution: ownershipResolution));
+
+        Assert.Equal(BuildDependencyResolutionKinds.Rejected, ownershipResolution.Kind);
+        Assert.Equal(BuildReuseDecisionKinds.RejectedExisting, evaluation.Decision.Decision);
+        Assert.False(evaluation.Decision.NewBuildRequired);
+        Assert.Contains(BuildPolicyReasonCodes.ExpertModeRequired, evaluation.Decision.ReasonCodes);
+        Assert.DoesNotContain(BuildReuseReasonCodes.ExpertSkipBuild, evaluation.Decision.ReasonCodes);
+    }
+
+    [Fact]
+    public void ExpertSkipBuild_IsAcceptedOnlyWithAcceptedOwnershipResolution()
+    {
+        BuildReuseEngine engine = new();
+        BuildPolicy policy = CreatePolicy(BuildPolicyModes.ExpertSkipBuild);
+        BuildDependencyResolution ownershipResolution = ResolveExpertSkipOwnership(policy, expertMode: true);
+
+        BuildReuseEvaluation evaluation = engine.Evaluate(new(
+            policy,
+            CreateFingerprint(),
+            ExistingFingerprint: null,
+            ExistingReadinessToken: null,
+            ExistingBuildId: null,
+            OutputsPresent: false,
+            NowUtc: Now,
+            OwnershipResolution: ownershipResolution));
+
+        Assert.Equal(BuildDependencyResolutionKinds.ExpertSkipBuildAccepted, ownershipResolution.Kind);
+        Assert.Equal(BuildReuseDecisionKinds.SkippedByPolicy, evaluation.Decision.Decision);
+        Assert.False(evaluation.Decision.NewBuildRequired);
+        Assert.Contains(BuildReuseReasonCodes.ExpertSkipBuild, evaluation.Decision.ReasonCodes);
+        Assert.Contains(BuildPolicyReasonCodes.ExpertSkipBuildAccepted, evaluation.Decision.ReasonCodes);
+        Assert.Null(evaluation.ReadinessInvalidation);
     }
 
     [Fact]
@@ -311,4 +388,16 @@ public sealed class BuildFingerprintReuseEngineTests
             PracticalAttachmentGuardrailBytes: 64 * 1024 * 1024,
             CleanBeforeBuild: mode == BuildPolicyModes.ForceRebuild,
             ReuseExistingReadiness: mode is BuildPolicyModes.RequireExistingReadyBuild or BuildPolicyModes.BuildIfMissingOrStale);
+
+    private static BuildDependencyResolution ResolveExpertSkipOwnership(BuildPolicy policy, bool expertMode)
+    {
+        BuildLinkage linkage = new(
+            LinkedBuildId: null,
+            LinkedBuildPlanId: null,
+            LinkedReadinessTokenId: null,
+            BuildReuseDecision: null,
+            policy.Mode);
+
+        return BuildOwnershipModel.ResolveBuildDependency(linkage, policy, expertMode);
+    }
 }

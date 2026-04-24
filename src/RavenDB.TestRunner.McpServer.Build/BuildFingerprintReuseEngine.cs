@@ -59,12 +59,7 @@ public sealed class BuildReuseEngine
 
         return request.Policy.Mode switch
         {
-            BuildPolicyModes.ExpertSkipBuild => BuildReuseEvaluation.Accept(
-                new(
-                    BuildReuseDecisionKinds.SkippedByPolicy,
-                    [BuildReuseReasonCodes.ExpertSkipBuild],
-                    request.ExistingBuildId,
-                    NewBuildRequired: false)),
+            BuildPolicyModes.ExpertSkipBuild => EvaluateExpertSkipPolicy(request),
 
             BuildPolicyModes.ForceRebuild => ForcedBuild(
                 request,
@@ -89,6 +84,32 @@ public sealed class BuildReuseEngine
                     request.ExistingBuildId,
                     NewBuildRequired: false))
         };
+    }
+
+    private static BuildReuseEvaluation EvaluateExpertSkipPolicy(BuildReuseEvaluationRequest request)
+    {
+        if (request.OwnershipResolution?.Kind != BuildDependencyResolutionKinds.ExpertSkipBuildAccepted)
+        {
+            IReadOnlyList<string> reasonCodes = request.OwnershipResolution is null
+                ? [BuildPolicyReasonCodes.ExpertModeRequired]
+                : request.OwnershipResolution.ReasonCodes.Count == 0
+                    ? [BuildPolicyReasonCodes.ExpertModeRequired]
+                    : request.OwnershipResolution.ReasonCodes;
+
+            return BuildReuseEvaluation.Accept(
+                new(
+                    BuildReuseDecisionKinds.RejectedExisting,
+                    reasonCodes,
+                    request.ExistingBuildId,
+                    NewBuildRequired: false));
+        }
+
+        return BuildReuseEvaluation.Accept(
+            new(
+                BuildReuseDecisionKinds.SkippedByPolicy,
+                [BuildReuseReasonCodes.ExpertSkipBuild, .. request.OwnershipResolution.ReasonCodes],
+                request.ExistingBuildId,
+                NewBuildRequired: false));
     }
 
     public BuildReadinessToken IssueReadyToken(
@@ -303,7 +324,8 @@ public sealed record BuildReuseEvaluationRequest(
     BuildReadinessToken? ExistingReadinessToken,
     string? ExistingBuildId,
     bool OutputsPresent,
-    DateTimeOffset NowUtc);
+    DateTimeOffset NowUtc,
+    BuildDependencyResolution? OwnershipResolution = null);
 
 public sealed record BuildReuseEvaluation(
     BuildReuseDecision Decision,
