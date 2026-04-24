@@ -5,6 +5,7 @@ using Raven.Client.Exceptions;
 using Raven.Client.ServerWide.Operations;
 using RavenDB.TestRunner.McpServer.Artifacts;
 using RavenDB.TestRunner.McpServer.Shared.Contracts.DocumentConventions;
+using RavenDB.TestRunner.McpServer.Shared.Contracts.EventContracts;
 using RavenDB.TestRunner.McpServer.Storage.RavenEmbedded;
 
 namespace RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests;
@@ -37,6 +38,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             AssertArtifactMetadataAndAttachmentPersistence(result);
             AssertAllDeferredBulkyDiagnosticsPersistAsDeferredMetadata(result);
             AssertArtifactIdentityValidation(result);
+            AssertEventCheckpointPersistence(result);
 
             string documentId = "artifact-ref-probes/" + Guid.NewGuid().ToString("N");
 
@@ -615,6 +617,134 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             ArtifactKindCatalog.BuildSummary,
             ArtifactRetentionClasses.Standard,
             "artifacts\\build\\" + ownerId.Replace('/', '\\') + "\\" + ArtifactKindCatalog.BuildSummary + "\\" + suffix)));
+    }
+
+    private static void AssertEventCheckpointPersistence(EmbeddedDatabaseBootstrapResult result)
+    {
+        string suffix = Guid.NewGuid().ToString("N");
+        string buildId = "builds/workspace-" + suffix + "/2026-04-24/" + suffix;
+        string runId = "runs/workspace-" + suffix + "/2026-04-24/" + suffix;
+        DateTime initialTimestamp = new(2026, 4, 24, 12, 0, 0, DateTimeKind.Utc);
+        DateTime updatedTimestamp = initialTimestamp.AddSeconds(30);
+        var checkpointStore = new RavenEventCheckpointStore(result.Store);
+
+        EventCheckpointPersistenceResult created = checkpointStore.Save(new(
+            EventStreamFamilies.Build,
+            buildId,
+            "build-cursor-0001",
+            Sequence: 1,
+            initialTimestamp));
+
+        string expectedBuildCheckpointId = "event-checkpoints/" + EventStreamFamilies.Build + "/" + buildId;
+        Assert.True(created.Created);
+        Assert.False(created.Updated);
+        Assert.Equal(expectedBuildCheckpointId, created.CheckpointId);
+        Assert.Equal(EventStreamFamilies.Build, created.StreamKind);
+        Assert.Equal(buildId, created.OwnerId);
+        Assert.Equal("build-cursor-0001", created.Cursor);
+        Assert.Equal(1, created.Sequence);
+        Assert.Equal(initialTimestamp, created.UpdatedAtUtc);
+
+        EventCheckpointDocument? loaded = checkpointStore.Load(EventStreamFamilies.Build, buildId);
+        Assert.NotNull(loaded);
+        Assert.Equal(expectedBuildCheckpointId, loaded.CheckpointId);
+        Assert.Equal(DocumentCollectionNames.EventCheckpoints, ReadCollectionName(result, loaded));
+        Assert.Equal("build-cursor-0001", loaded.Cursor);
+        Assert.Equal(1, loaded.Sequence);
+
+        EventCheckpointPersistenceResult idempotent = checkpointStore.Save(new(
+            EventStreamFamilies.Build,
+            buildId,
+            "build-cursor-0001",
+            Sequence: 1,
+            updatedTimestamp));
+
+        Assert.False(idempotent.Created);
+        Assert.False(idempotent.Updated);
+        Assert.Equal(initialTimestamp, idempotent.UpdatedAtUtc);
+
+        EventCheckpointPersistenceResult updated = checkpointStore.Save(new(
+            EventStreamFamilies.Build,
+            buildId,
+            "build-cursor-0002",
+            Sequence: 2,
+            updatedTimestamp));
+
+        Assert.False(updated.Created);
+        Assert.True(updated.Updated);
+        Assert.Equal("build-cursor-0002", updated.Cursor);
+        Assert.Equal(2, updated.Sequence);
+        Assert.Equal(updatedTimestamp, updated.UpdatedAtUtc);
+
+        EventCheckpointDocument? resumed = checkpointStore.Load(EventStreamFamilies.Build, buildId);
+        Assert.NotNull(resumed);
+        Assert.Equal("build-cursor-0002", resumed.Cursor);
+        Assert.Equal(2, resumed.Sequence);
+        Assert.Equal(updatedTimestamp, resumed.UpdatedAtUtc);
+
+        EventCheckpointPersistenceResult runCheckpoint = checkpointStore.Save(new(
+            EventStreamFamilies.Run,
+            runId,
+            "run-cursor-0001",
+            Sequence: 7,
+            initialTimestamp));
+
+        Assert.Equal("event-checkpoints/" + EventStreamFamilies.Run + "/" + runId, runCheckpoint.CheckpointId);
+        Assert.Equal(EventStreamFamilies.Run, runCheckpoint.StreamKind);
+        Assert.Equal(runId, runCheckpoint.OwnerId);
+        Assert.Equal("run-cursor-0001", runCheckpoint.Cursor);
+        Assert.Equal(7, runCheckpoint.Sequence);
+
+        Assert.Throws<InvalidOperationException>(() => checkpointStore.Save(new(
+            EventStreamFamilies.Build,
+            buildId,
+            "build-cursor-0001",
+            Sequence: 1,
+            updatedTimestamp.AddSeconds(1))));
+
+        Assert.Throws<InvalidOperationException>(() => checkpointStore.Save(new(
+            EventStreamFamilies.Build,
+            buildId,
+            "build-cursor-0003",
+            Sequence: 2,
+            updatedTimestamp.AddSeconds(1))));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => checkpointStore.Save(new(
+            "not-a-stream",
+            buildId,
+            "cursor",
+            Sequence: 1,
+            initialTimestamp)));
+
+        Assert.Throws<ArgumentException>(() => checkpointStore.Save(new(
+            EventStreamFamilies.Build,
+            "builds//" + suffix,
+            "cursor",
+            Sequence: 1,
+            initialTimestamp)));
+
+        Assert.Throws<ArgumentException>(() => checkpointStore.Save(new(
+            EventStreamFamilies.Build,
+            "builds/../" + suffix,
+            "cursor",
+            Sequence: 1,
+            initialTimestamp)));
+
+        Assert.Throws<ArgumentException>(() => checkpointStore.Save(new(
+            EventStreamFamilies.Build,
+            "builds\\" + suffix,
+            "cursor",
+            Sequence: 1,
+            initialTimestamp)));
+    }
+
+    private static string? ReadCollectionName(
+        EmbeddedDatabaseBootstrapResult result,
+        EventCheckpointDocument document)
+    {
+        using var session = result.Store.OpenSession();
+        EventCheckpointDocument loaded = session.Load<EventCheckpointDocument>(document.CheckpointId);
+        return session.Advanced.GetMetadataFor(loaded)["@collection"]?.ToString();
     }
 
     private static ArtifactWriteRequest CreateArtifactWriteRequest(
