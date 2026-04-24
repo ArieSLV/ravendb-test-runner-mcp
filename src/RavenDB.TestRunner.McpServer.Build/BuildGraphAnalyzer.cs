@@ -95,6 +95,11 @@ public sealed class BuildGraphAnalyzer
             throw new InvalidOperationException("Solution scope requires an explicit .sln path or exactly one top-level solution file.");
         }
 
+        if (paths.Count == 0 && solutionPaths.Count > 1)
+        {
+            throw new InvalidOperationException("Implicit solution scope requires exactly one top-level solution file. Provide an explicit .sln path when multiple top-level solutions exist.");
+        }
+
         return solutionPaths
             .Select(path => new BuildGraphRoot(BuildGraphRootKinds.Solution, ToWorkspacePath(workspaceRoot, path)))
             .OrderBy(root => root.Path, StablePathComparer.Instance)
@@ -211,7 +216,7 @@ public sealed class BuildGraphAnalyzer
             }
 
             string fullPath = Path.GetFullPath(Path.Combine(solutionDirectory, relativeProjectPath));
-            if (!IsUnderDirectory(workspaceRoot, fullPath))
+            if (!IsStrictlyUnderDirectory(workspaceRoot, fullPath))
             {
                 warnings.Add(BuildGraphWarningCodes.ProjectOutsideWorkspace);
                 continue;
@@ -255,7 +260,7 @@ public sealed class BuildGraphAnalyzer
             .Select(value => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(projectPath)!, value!)))
             .Where(path =>
             {
-                bool isInsideWorkspace = IsUnderDirectory(workspaceRoot, path);
+                bool isInsideWorkspace = IsStrictlyUnderDirectory(workspaceRoot, path);
                 if (!isInsideWorkspace)
                 {
                     warnings.Add(BuildGraphWarningCodes.ProjectReferenceOutsideWorkspace);
@@ -339,12 +344,25 @@ public sealed class BuildGraphAnalyzer
         return fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
 
-    private static string ResolveExistingDirectory(string workspaceRoot, string path) =>
-        NormalizeExistingDirectory(Path.Combine(workspaceRoot, FromWorkspacePath(path)));
+    private static string ResolveExistingDirectory(string workspaceRoot, string path)
+    {
+        string fullPath = NormalizeExistingDirectory(Path.Combine(workspaceRoot, FromWorkspacePath(path)));
+        if (!IsAtOrUnderDirectory(workspaceRoot, fullPath))
+        {
+            throw new InvalidOperationException($"Build graph directory root '{path}' must be at or under the workspace root.");
+        }
+
+        return fullPath;
+    }
 
     private static string ResolveExistingFile(string workspaceRoot, string path, string expectedExtension)
     {
         string fullPath = Path.GetFullPath(Path.Combine(workspaceRoot, FromWorkspacePath(path)));
+        if (!IsStrictlyUnderDirectory(workspaceRoot, fullPath))
+        {
+            throw new InvalidOperationException($"Build graph file root '{path}' must be under the workspace root.");
+        }
+
         if (!File.Exists(fullPath))
         {
             throw new FileNotFoundException($"Build graph root '{path}' was not found.", fullPath);
@@ -358,12 +376,26 @@ public sealed class BuildGraphAnalyzer
         return fullPath;
     }
 
-    private static bool IsUnderDirectory(string root, string candidate)
+    private static bool IsAtOrUnderDirectory(string root, string candidate)
     {
-        string normalizedRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        string normalizedCandidate = Path.GetFullPath(candidate);
-        return normalizedCandidate.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase);
+        string normalizedRoot = NormalizeDirectoryForComparison(root);
+        string normalizedCandidate = Path.GetFullPath(candidate).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        return string.Equals(normalizedRoot, normalizedCandidate, StringComparison.OrdinalIgnoreCase) ||
+            normalizedCandidate.StartsWith(normalizedRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
+
+    private static bool IsStrictlyUnderDirectory(string root, string candidate)
+    {
+        string normalizedRoot = NormalizeDirectoryForComparison(root);
+        string normalizedCandidate = Path.GetFullPath(candidate).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        return !string.Equals(normalizedRoot, normalizedCandidate, StringComparison.OrdinalIgnoreCase) &&
+            normalizedCandidate.StartsWith(normalizedRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeDirectoryForComparison(string path) =>
+        Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
     private static string ToWorkspacePath(string workspaceRoot, string fullPath)
     {

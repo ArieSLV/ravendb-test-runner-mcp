@@ -138,6 +138,259 @@ public sealed class BuildGraphAnalyzerTests
         }
     }
 
+    [Fact]
+    public void AnalyzeProjectScope_RejectsExplicitProjectPathOutsideWorkspace()
+    {
+        string workspace = CreateWorkspace();
+        string outside = CreateWorkspace();
+
+        try
+        {
+            WriteProject(outside, "Outside.csproj", "<TargetFramework>net10.0</TargetFramework>");
+            string outsideProjectPath = Path.Combine(outside, "Outside.csproj");
+
+            BuildGraphAnalyzer analyzer = new();
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => analyzer.Analyze(new(
+                "workspaces/test",
+                workspace,
+                new BuildScope(
+                    BuildScopeKinds.Project,
+                    [outsideProjectPath],
+                    "Debug",
+                    [],
+                    [],
+                    new Dictionary<string, string>()))));
+
+            Assert.Contains("must be under the workspace root", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectoryIfExists(workspace);
+            DeleteDirectoryIfExists(outside);
+        }
+    }
+
+    [Fact]
+    public void AnalyzeSolutionScope_RejectsExplicitSolutionPathOutsideWorkspace()
+    {
+        string workspace = CreateWorkspace();
+        string outside = CreateWorkspace();
+
+        try
+        {
+            WriteSolution(outside, "Outside.sln");
+            string outsideSolutionPath = Path.Combine(outside, "Outside.sln");
+
+            BuildGraphAnalyzer analyzer = new();
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => analyzer.Analyze(new(
+                "workspaces/test",
+                workspace,
+                new BuildScope(
+                    BuildScopeKinds.Solution,
+                    [outsideSolutionPath],
+                    "Debug",
+                    [],
+                    [],
+                    new Dictionary<string, string>()))));
+
+            Assert.Contains("must be under the workspace root", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectoryIfExists(workspace);
+            DeleteDirectoryIfExists(outside);
+        }
+    }
+
+    [Fact]
+    public void AnalyzeDirectoryScope_RejectsExplicitDirectoryPathOutsideWorkspace()
+    {
+        string workspace = CreateWorkspace();
+        string outside = CreateWorkspace();
+
+        try
+        {
+            BuildGraphAnalyzer analyzer = new();
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => analyzer.Analyze(new(
+                "workspaces/test",
+                workspace,
+                new BuildScope(
+                    BuildScopeKinds.Directory,
+                    [outside],
+                    "Debug",
+                    [],
+                    [],
+                    new Dictionary<string, string>()))));
+
+            Assert.Contains("must be at or under the workspace root", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectoryIfExists(workspace);
+            DeleteDirectoryIfExists(outside);
+        }
+    }
+
+    [Fact]
+    public void AnalyzeDirectoryScope_AcceptsWorkspaceRoot()
+    {
+        string workspace = CreateWorkspace();
+
+        try
+        {
+            WriteProject(workspace, "RootProject.csproj", "<TargetFramework>net10.0</TargetFramework>");
+
+            BuildGraphAnalyzer analyzer = new();
+            BuildGraphAnalysisResult result = analyzer.Analyze(new(
+                "workspaces/test",
+                workspace,
+                new BuildScope(
+                    BuildScopeKinds.Directory,
+                    ["."],
+                    "Debug",
+                    [],
+                    [],
+                    new Dictionary<string, string>())));
+
+            Assert.Equal(["."], result.SelectedRoots.Where(root => root.Kind == BuildGraphRootKinds.Directory).Select(root => root.Path));
+            Assert.Equal(["RootProject.csproj"], result.Projects.Select(project => project.ProjectPath));
+        }
+        finally
+        {
+            DeleteDirectoryIfExists(workspace);
+        }
+    }
+
+    [Fact]
+    public void AnalyzeImplicitSolutionScope_RejectsMultipleTopLevelSolutions()
+    {
+        string workspace = CreateWorkspace();
+
+        try
+        {
+            WriteSolution(workspace, "First.sln");
+            WriteSolution(workspace, "Second.sln");
+
+            BuildGraphAnalyzer analyzer = new();
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => analyzer.Analyze(new(
+                "workspaces/test",
+                workspace,
+                new BuildScope(
+                    BuildScopeKinds.Solution,
+                    [],
+                    "Debug",
+                    [],
+                    [],
+                    new Dictionary<string, string>()))));
+
+            Assert.Contains("exactly one top-level solution file", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectoryIfExists(workspace);
+        }
+    }
+
+    [Fact]
+    public void AnalyzeSolutionScope_WarnsWhenSolutionProjectEntryIsMissing()
+    {
+        string workspace = CreateWorkspace();
+
+        try
+        {
+            WriteSolution(workspace, "RavenDB.sln", "src\\Missing\\Missing.csproj");
+
+            BuildGraphAnalyzer analyzer = new();
+            BuildGraphAnalysisResult result = analyzer.Analyze(new(
+                "workspaces/test",
+                workspace,
+                new BuildScope(
+                    BuildScopeKinds.Solution,
+                    ["RavenDB.sln"],
+                    "Debug",
+                    [],
+                    [],
+                    new Dictionary<string, string>())));
+
+            Assert.Contains(BuildGraphWarningCodes.SolutionProjectMissing, result.Warnings);
+            Assert.Empty(result.Projects);
+        }
+        finally
+        {
+            DeleteDirectoryIfExists(workspace);
+        }
+    }
+
+    [Fact]
+    public void AnalyzeProjectScope_WarnsWhenProjectReferencePointsOutsideWorkspace()
+    {
+        string workspace = CreateWorkspace();
+        string outside = CreateWorkspace();
+
+        try
+        {
+            WriteProject(outside, "Outside.csproj", "<TargetFramework>net10.0</TargetFramework>");
+            string outsideProjectPath = Path.Combine(outside, "Outside.csproj");
+            WriteProject(
+                workspace,
+                "Inside.csproj",
+                "<TargetFramework>net10.0</TargetFramework>",
+                $"<ProjectReference Include=\"{outsideProjectPath}\" />");
+
+            BuildGraphAnalyzer analyzer = new();
+            BuildGraphAnalysisResult result = analyzer.Analyze(new(
+                "workspaces/test",
+                workspace,
+                new BuildScope(
+                    BuildScopeKinds.Project,
+                    ["Inside.csproj"],
+                    "Debug",
+                    [],
+                    [],
+                    new Dictionary<string, string>())));
+
+            Assert.Contains(BuildGraphWarningCodes.ProjectReferenceOutsideWorkspace, result.Warnings);
+            Assert.Empty(result.Projects.Single().ProjectReferences);
+        }
+        finally
+        {
+            DeleteDirectoryIfExists(workspace);
+            DeleteDirectoryIfExists(outside);
+        }
+    }
+
+    [Fact]
+    public void Analyze_RejectsInvalidScopeKind()
+    {
+        string workspace = CreateWorkspace();
+
+        try
+        {
+            BuildGraphAnalyzer analyzer = new();
+
+            ArgumentException exception = Assert.Throws<ArgumentException>(() => analyzer.Analyze(new(
+                "workspaces/test",
+                workspace,
+                new BuildScope(
+                    "invalid_scope",
+                    [],
+                    "Debug",
+                    [],
+                    [],
+                    new Dictionary<string, string>()))));
+
+            Assert.Contains("Unknown build scope kind", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectoryIfExists(workspace);
+        }
+    }
+
     private static string CreateWorkspace()
     {
         string workspace = Path.Combine(Path.GetTempPath(), "rtrms-build-graph-" + Guid.NewGuid().ToString("N"));
@@ -182,5 +435,13 @@ public sealed class BuildGraphAnalyzerTests
         }
 
         File.WriteAllLines(path, lines);
+    }
+
+    private static void DeleteDirectoryIfExists(string path)
+    {
+        if (Directory.Exists(path))
+        {
+            Directory.Delete(path, recursive: true);
+        }
     }
 }
