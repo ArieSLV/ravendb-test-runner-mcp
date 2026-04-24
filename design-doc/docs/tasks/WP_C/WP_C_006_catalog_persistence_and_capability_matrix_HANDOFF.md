@@ -23,6 +23,11 @@
   - Reusing the same immutable document ID with different capability matrix payload is rejected deterministically.
   - Reusing the same immutable document ID with different category catalog payload is rejected deterministically.
   - Rejections include the immutable document ID and first mismatched canonical persisted field; RavenDB metadata/etags are ignored.
+- Corrective pass `cc2259d` canonicalized capability matrix version-sensitive points:
+  - `VersionSensitivePoints` are persisted in deterministic ordinal order.
+  - Immutable-ID comparison treats `VersionSensitivePoints` as an unordered ordinal set.
+  - Re-saving the same immutable capability matrix ID with the same points in a different order remains idempotent.
+  - Reusing the same immutable capability matrix ID with a genuinely different point set is still rejected as drift.
 - Storage identity validation rejects path separators, traversal segments, unsupported repo lines, and mismatched request/capability matrix repo lines.
 
 ## Touched contracts
@@ -56,13 +61,16 @@
 - Corrective idempotency validation passed:
   `dotnet test .\tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-c-006-idempotency-corrective.trx"`
 - Result: 10 storage tests discovered, executed, and passed.
+- Corrective version-sensitive-points validation passed:
+  `dotnet test .\tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-c-006-version-points-corrective.trx"`
+- Result: 10 storage tests discovered, executed, and passed.
 - Semantics harness passed:
   `dotnet run --no-build --project .\tests\RavenDB.TestRunner.McpServer.Semantics.Tests\RavenDB.TestRunner.McpServer.Semantics.Tests.csproj -v minimal`
 - Result: 8 workspace detection and capability checks passed.
 
 ## Progress ledger update
 - Mark `WP_C_006_catalog_persistence_and_capability_matrix` as `Done`.
-- Record implementation commit `ef2c67d`.
+- Record implementation commit `cc2259d`.
 - Keep `ENV-001` open.
 - Keep `TASK_INDEX.md` unchanged.
 
