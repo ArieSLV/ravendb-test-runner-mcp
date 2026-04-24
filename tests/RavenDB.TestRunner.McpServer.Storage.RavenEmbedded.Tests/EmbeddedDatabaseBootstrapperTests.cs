@@ -346,6 +346,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         Assert.False(attachmentResult.IsDeferredByPolicy);
         Assert.Equal("stdout.log", attachmentResult.AttachmentName);
         Assert.Null(attachmentResult.DeferredReason);
+        Assert.Empty(attachmentResult.DeferredReasonCodes);
         Assert.Equal(ComputeSha256(stdoutPayload), attachmentResult.Sha256);
 
         ArtifactPersistenceResult deferredResult = artifactStore.Store(new(
@@ -365,6 +366,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         Assert.Null(deferredResult.AttachmentName);
         Assert.StartsWith("deferred:", deferredResult.Locator, StringComparison.Ordinal);
         Assert.Equal(ArtifactDeferredReasons.DeferredArtifactKind, deferredResult.DeferredReason);
+        Assert.Equal(ExpectedDeferredBulkyDiagnosticReasons, deferredResult.DeferredReasonCodes);
 
         ArtifactPersistenceResult oversizedResult = artifactStore.Store(new(
             ArtifactOwnerKinds.Build,
@@ -383,6 +385,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         Assert.Null(oversizedResult.AttachmentName);
         Assert.StartsWith("deferred:", oversizedResult.Locator, StringComparison.Ordinal);
         Assert.Equal(ArtifactDeferredReasons.ExceedsPracticalAttachmentGuardrail, oversizedResult.DeferredReason);
+        Assert.Equal(ExpectedOversizedInScopeReasons, oversizedResult.DeferredReasonCodes);
 
         using (var verificationSession = result.Store.OpenSession())
         {
@@ -403,6 +406,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             Assert.True(attachmentMetadata.PreviewAvailable);
             Assert.True(attachmentMetadata.Sensitive);
             Assert.Null(attachmentMetadata.DeferredReason);
+            Assert.Empty(attachmentMetadata.DeferredReasonCodes);
 
             var attachmentNames = verificationSession.Advanced.Attachments.GetNames(attachmentMetadata);
             Assert.Single(attachmentNames);
@@ -420,6 +424,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             Assert.Equal(ArtifactStorageKinds.DeferredExternal, deferredMetadata.StorageKind);
             Assert.Null(deferredMetadata.AttachmentName);
             Assert.Equal(ArtifactDeferredReasons.DeferredArtifactKind, deferredMetadata.DeferredReason);
+            Assert.Equal(ExpectedDeferredBulkyDiagnosticReasons, deferredMetadata.DeferredReasonCodes);
             Assert.Empty(verificationSession.Advanced.Attachments.GetNames(deferredMetadata));
 
             ArtifactMetadataDocument oversizedMetadata =
@@ -428,6 +433,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             Assert.Equal(ArtifactStorageKinds.DeferredExternal, oversizedMetadata.StorageKind);
             Assert.Null(oversizedMetadata.AttachmentName);
             Assert.Equal(ArtifactDeferredReasons.ExceedsPracticalAttachmentGuardrail, oversizedMetadata.DeferredReason);
+            Assert.Equal(ExpectedOversizedInScopeReasons, oversizedMetadata.DeferredReasonCodes);
             Assert.Empty(verificationSession.Advanced.Attachments.GetNames(oversizedMetadata));
         }
 
@@ -489,6 +495,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             Assert.StartsWith("deferred:", deferredResult.Locator, StringComparison.Ordinal);
             Assert.Equal(payload.LongLength, deferredResult.SizeBytes);
             Assert.Equal(ArtifactDeferredReasons.DeferredArtifactKind, deferredResult.DeferredReason);
+            Assert.Equal(ExpectedDeferredBulkyDiagnosticReasons, deferredResult.DeferredReasonCodes);
             deferredResults.Add(deferredResult);
         }
 
@@ -502,6 +509,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             Assert.Equal(ownerId, metadata.OwnerId);
             Assert.Null(metadata.AttachmentName);
             Assert.Equal(ArtifactDeferredReasons.DeferredArtifactKind, metadata.DeferredReason);
+            Assert.Equal(ExpectedDeferredBulkyDiagnosticReasons, metadata.DeferredReasonCodes);
             Assert.StartsWith("deferred:", metadata.Locator, StringComparison.Ordinal);
             Assert.Empty(verificationSession.Advanced.Attachments.GetNames(metadata));
         }
@@ -722,6 +730,20 @@ public sealed class EmbeddedDatabaseBootstrapperTests
 
         public DateTime CreatedAtUtc { get; init; }
     }
+
+    private static readonly string[] ExpectedDeferredBulkyDiagnosticReasons =
+    [
+        ArtifactDeferredReasons.DeferredArtifactKind,
+        ArtifactDeferredReasons.NoV1SpilloverBackendConfigured,
+        ArtifactDeferredReasons.FutureExtensionRequired
+    ];
+
+    private static readonly string[] ExpectedOversizedInScopeReasons =
+    [
+        ArtifactDeferredReasons.ExceedsPracticalAttachmentGuardrail,
+        ArtifactDeferredReasons.NoV1SpilloverBackendConfigured,
+        ArtifactDeferredReasons.FutureExtensionRequired
+    ];
 
     private sealed class MutableConcurrencyProbeDocument
     {

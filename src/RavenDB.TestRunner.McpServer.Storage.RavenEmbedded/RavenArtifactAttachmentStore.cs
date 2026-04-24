@@ -38,6 +38,7 @@ public sealed class RavenArtifactAttachmentStore
             ? NormalizeAttachmentName(request.AttachmentName, request.ArtifactKind)
             : null;
         string storageKind = guardrailDecision.StorageKind;
+        string[] deferredReasonCodes = guardrailDecision.DeferredReasonCodes.ToArray();
         string locator = storeAsAttachment
             ? artifactId + "/" + attachmentName
             : "deferred:" + artifactId;
@@ -59,7 +60,8 @@ public sealed class RavenArtifactAttachmentStore
             CreatedAtUtc = request.CreatedAtUtc ?? DateTime.UtcNow,
             ExpiresAtUtc = request.ExpiresAtUtc,
             Sensitive = request.Sensitive,
-            DeferredReason = guardrailDecision.PrimaryDeferredReason
+            DeferredReason = guardrailDecision.PrimaryDeferredReason,
+            DeferredReasonCodes = deferredReasonCodes
         };
 
         using (var session = documentStore.OpenSession())
@@ -88,7 +90,8 @@ public sealed class RavenArtifactAttachmentStore
             locator,
             request.Payload.LongLength,
             sha256,
-            guardrailDecision.PrimaryDeferredReason);
+            guardrailDecision.PrimaryDeferredReason,
+            deferredReasonCodes);
     }
 
     private static void ValidateRequest(ArtifactWriteRequest request)

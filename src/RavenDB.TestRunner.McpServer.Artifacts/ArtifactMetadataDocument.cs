@@ -33,4 +33,6 @@ public sealed class ArtifactMetadataDocument
     public bool Sensitive { get; set; }
 
     public string? DeferredReason { get; set; }
+
+    public string[] DeferredReasonCodes { get; set; } = [];
 }

@@ -9,4 +9,5 @@ public sealed record ArtifactPersistenceResult(
     string Locator,
     long SizeBytes,
     string Sha256,
-    string? DeferredReason);
+    string? DeferredReason,
+    IReadOnlyList<string> DeferredReasonCodes);
