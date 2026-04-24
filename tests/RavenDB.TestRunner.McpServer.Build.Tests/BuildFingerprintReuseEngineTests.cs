@@ -275,6 +275,56 @@ public sealed class BuildFingerprintReuseEngineTests
     }
 
     [Fact]
+    public void ExpertSkipBuild_IsRejectedWithoutLeakingReadinessTokenProofReason()
+    {
+        BuildReuseEngine engine = new();
+        const string readinessTokenId = "build-readiness/ws-1/fingerprint-1";
+        BuildDependencyResolution ownershipResolution = BuildDependencyResolution.ReadinessToken(readinessTokenId);
+
+        BuildReuseEvaluation evaluation = engine.Evaluate(new(
+            CreatePolicy(BuildPolicyModes.ExpertSkipBuild),
+            CreateFingerprint(),
+            ExistingFingerprint: null,
+            ExistingReadinessToken: null,
+            ExistingBuildId: null,
+            OutputsPresent: false,
+            NowUtc: Now,
+            OwnershipResolution: ownershipResolution));
+
+        Assert.Equal(BuildDependencyResolutionKinds.ReadinessTokenAccepted, ownershipResolution.Kind);
+        Assert.Equal(BuildReuseDecisionKinds.RejectedExisting, evaluation.Decision.Decision);
+        Assert.False(evaluation.Decision.NewBuildRequired);
+        Assert.Equal([BuildPolicyReasonCodes.ExpertModeRequired], evaluation.Decision.ReasonCodes);
+        Assert.DoesNotContain(readinessTokenId, evaluation.Decision.ReasonCodes);
+        Assert.DoesNotContain(BuildReuseReasonCodes.ExpertSkipBuild, evaluation.Decision.ReasonCodes);
+    }
+
+    [Fact]
+    public void ExpertSkipBuild_IsRejectedWithoutLeakingLinkedBuildProofReason()
+    {
+        BuildReuseEngine engine = new();
+        const string linkedBuildId = "builds/ws-1/2026-04-24/001";
+        BuildDependencyResolution ownershipResolution = BuildDependencyResolution.LinkedBuild(linkedBuildId);
+
+        BuildReuseEvaluation evaluation = engine.Evaluate(new(
+            CreatePolicy(BuildPolicyModes.ExpertSkipBuild),
+            CreateFingerprint(),
+            ExistingFingerprint: null,
+            ExistingReadinessToken: null,
+            ExistingBuildId: linkedBuildId,
+            OutputsPresent: false,
+            NowUtc: Now,
+            OwnershipResolution: ownershipResolution));
+
+        Assert.Equal(BuildDependencyResolutionKinds.LinkedBuildAccepted, ownershipResolution.Kind);
+        Assert.Equal(BuildReuseDecisionKinds.RejectedExisting, evaluation.Decision.Decision);
+        Assert.False(evaluation.Decision.NewBuildRequired);
+        Assert.Equal([BuildPolicyReasonCodes.ExpertModeRequired], evaluation.Decision.ReasonCodes);
+        Assert.DoesNotContain(linkedBuildId, evaluation.Decision.ReasonCodes);
+        Assert.DoesNotContain(BuildReuseReasonCodes.ExpertSkipBuild, evaluation.Decision.ReasonCodes);
+    }
+
+    [Fact]
     public void ExpertSkipBuild_IsAcceptedOnlyWithAcceptedOwnershipResolution()
     {
         BuildReuseEngine engine = new();

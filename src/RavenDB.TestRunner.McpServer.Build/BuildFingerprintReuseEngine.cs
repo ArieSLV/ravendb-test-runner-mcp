@@ -90,16 +90,10 @@ public sealed class BuildReuseEngine
     {
         if (request.OwnershipResolution?.Kind != BuildDependencyResolutionKinds.ExpertSkipBuildAccepted)
         {
-            IReadOnlyList<string> reasonCodes = request.OwnershipResolution is null
-                ? [BuildPolicyReasonCodes.ExpertModeRequired]
-                : request.OwnershipResolution.ReasonCodes.Count == 0
-                    ? [BuildPolicyReasonCodes.ExpertModeRequired]
-                    : request.OwnershipResolution.ReasonCodes;
-
             return BuildReuseEvaluation.Accept(
                 new(
                     BuildReuseDecisionKinds.RejectedExisting,
-                    reasonCodes,
+                    [BuildPolicyReasonCodes.ExpertModeRequired],
                     request.ExistingBuildId,
                     NewBuildRequired: false));
         }
