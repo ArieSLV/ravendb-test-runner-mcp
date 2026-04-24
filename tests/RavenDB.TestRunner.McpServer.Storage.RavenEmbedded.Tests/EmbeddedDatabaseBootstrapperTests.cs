@@ -40,6 +40,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             AssertArtifactIdentityValidation(result);
             AssertEventCheckpointPersistence(result);
             AssertRetentionCleanupJournalBaseline(result);
+            AssertRetentionCleanupCapUsesArtifactIdOrder(result);
 
             string documentId = "artifact-ref-probes/" + Guid.NewGuid().ToString("N");
 
@@ -885,6 +886,44 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         Assert.NotNull(deferredMetadata);
         Assert.Equal(ArtifactStorageKinds.DeferredExternal, deferredMetadata.StorageKind);
         Assert.Empty(verificationSession.Advanced.Attachments.GetNames(deferredMetadata));
+    }
+
+    private static void AssertRetentionCleanupCapUsesArtifactIdOrder(EmbeddedDatabaseBootstrapResult result)
+    {
+        string suffix = Guid.NewGuid().ToString("N");
+        DateTime nowUtc = new(2026, 4, 24, 16, 0, 0, DateTimeKind.Utc);
+        DateTime createdAtUtc = nowUtc.AddDays(-3);
+        DateTime expiredAtUtc = nowUtc.AddDays(-1);
+        string ownerId = "000-retention-cap/" + suffix;
+        string artifactIdC = CreateArtifactId(ArtifactOwnerKinds.Attempt, ownerId, ArtifactKindCatalog.AttemptSummary, "c-" + suffix);
+        string artifactIdA = CreateArtifactId(ArtifactOwnerKinds.Attempt, ownerId, ArtifactKindCatalog.AttemptSummary, "a-" + suffix);
+        string artifactIdB = CreateArtifactId(ArtifactOwnerKinds.Attempt, ownerId, ArtifactKindCatalog.AttemptSummary, "b-" + suffix);
+        var artifactStore = new RavenArtifactAttachmentStore(result.Store);
+
+        foreach (string artifactId in new[] { artifactIdC, artifactIdA, artifactIdB })
+        {
+            artifactStore.Store(new(
+                ArtifactOwnerKinds.Attempt,
+                ownerId,
+                ArtifactKindCatalog.AttemptSummary,
+                Encoding.UTF8.GetBytes("capped cleanup artifact " + artifactId),
+                "application/json",
+                ArtifactRetentionClasses.Standard,
+                AttachmentName: "attempt-summary.json",
+                CreatedAtUtc: createdAtUtc,
+                ExpiresAtUtc: expiredAtUtc,
+                ArtifactId: artifactId));
+        }
+
+        var cleanupStore = new RavenArtifactRetentionCleanupStore(result.Store);
+        ArtifactRetentionCleanupPlan plan = cleanupStore.Plan(new(
+            nowUtc,
+            ActiveOwnerIds: Array.Empty<string>(),
+            MaxArtifacts: 2));
+
+        Assert.Equal(new[] { artifactIdA, artifactIdB }, plan.Items.Select(item => item.ArtifactId).ToArray());
+        Assert.DoesNotContain(plan.Items, item => string.Equals(item.ArtifactId, artifactIdC, StringComparison.Ordinal));
+        Assert.All(plan.Items, item => Assert.Equal(ArtifactCleanupActionKinds.CleanupCandidate, item.ActionKind));
     }
 
     private static void AssertCleanupCandidate(

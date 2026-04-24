@@ -27,8 +27,10 @@ public sealed class RavenArtifactRetentionCleanupStore
 
         using var session = documentStore.OpenSession();
         ArtifactMetadataDocument[] artifacts = session.Advanced
-            .LoadStartingWith<ArtifactMetadataDocument>("artifacts/", null, 0, request.MaxArtifacts)
+            .LoadStartingWith<ArtifactMetadataDocument>("artifacts/", null, 0, int.MaxValue)
+            .Select(EnsureArtifactId)
             .OrderBy(artifact => artifact.ArtifactId, StringComparer.Ordinal)
+            .Take(request.MaxArtifacts)
             .ToArray();
 
         ArtifactRetentionCleanupPlanItem[] items = artifacts
@@ -36,6 +38,23 @@ public sealed class RavenArtifactRetentionCleanupStore
             .ToArray();
 
         return new(nowUtc, activeOwnerIds.OrderBy(ownerId => ownerId, StringComparer.Ordinal).ToArray(), items);
+
+        ArtifactMetadataDocument EnsureArtifactId(ArtifactMetadataDocument artifact)
+        {
+            if (string.IsNullOrWhiteSpace(artifact.ArtifactId) is false)
+            {
+                return artifact;
+            }
+
+            string documentId = session.Advanced.GetDocumentId(artifact);
+            if (string.IsNullOrWhiteSpace(documentId))
+            {
+                throw new InvalidOperationException("Loaded artifact metadata document is missing a RavenDB document ID.");
+            }
+
+            artifact.ArtifactId = documentId;
+            return artifact;
+        }
     }
 
     public CleanupJournalPersistenceResult CreateJournal(
