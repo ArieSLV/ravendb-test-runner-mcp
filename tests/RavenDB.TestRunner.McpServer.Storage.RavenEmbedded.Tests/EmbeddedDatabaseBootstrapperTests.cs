@@ -39,6 +39,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             AssertAllDeferredBulkyDiagnosticsPersistAsDeferredMetadata(result);
             AssertArtifactIdentityValidation(result);
             AssertEventCheckpointPersistence(result);
+            AssertRetentionCleanupJournalBaseline(result);
 
             string documentId = "artifact-ref-probes/" + Guid.NewGuid().ToString("N");
 
@@ -744,6 +745,182 @@ public sealed class EmbeddedDatabaseBootstrapperTests
     {
         using var session = result.Store.OpenSession();
         EventCheckpointDocument loaded = session.Load<EventCheckpointDocument>(document.CheckpointId);
+        return session.Advanced.GetMetadataFor(loaded)["@collection"]?.ToString();
+    }
+
+    private static void AssertRetentionCleanupJournalBaseline(EmbeddedDatabaseBootstrapResult result)
+    {
+        string suffix = Guid.NewGuid().ToString("N");
+        DateTime nowUtc = new(2026, 4, 24, 15, 0, 0, DateTimeKind.Utc);
+        DateTime createdAtUtc = nowUtc.AddDays(-2);
+        DateTime expiredAtUtc = nowUtc.AddHours(-1);
+        string buildOwnerId = "builds/workspace-" + suffix + "/2026-04-24/build-" + suffix;
+        string runOwnerId = "runs/workspace-" + suffix + "/2026-04-24/run-" + suffix;
+        string manualHoldOwnerId = "builds/workspace-" + suffix + "/2026-04-24/manual-" + suffix;
+        string activeOwnerId = "runs/workspace-" + suffix + "/2026-04-24/active-" + suffix;
+        string deferredOwnerId = "runs/workspace-" + suffix + "/2026-04-24/deferred-" + suffix;
+        var artifactStore = new RavenArtifactAttachmentStore(result.Store);
+
+        ArtifactPersistenceResult buildCandidate = artifactStore.Store(new(
+            ArtifactOwnerKinds.Build,
+            buildOwnerId,
+            ArtifactKindCatalog.BuildStdout,
+            Encoding.UTF8.GetBytes("expired build artifact " + suffix),
+            "text/plain",
+            ArtifactRetentionClasses.Diagnostic,
+            AttachmentName: "build-stdout.log",
+            CreatedAtUtc: createdAtUtc,
+            ExpiresAtUtc: expiredAtUtc,
+            ArtifactId: CreateArtifactId(ArtifactOwnerKinds.Build, buildOwnerId, ArtifactKindCatalog.BuildStdout, suffix + "-build")));
+
+        ArtifactPersistenceResult runCandidate = artifactStore.Store(new(
+            ArtifactOwnerKinds.Run,
+            runOwnerId,
+            ArtifactKindCatalog.RunTrx,
+            Encoding.UTF8.GetBytes("expired run artifact " + suffix),
+            "application/xml",
+            ArtifactRetentionClasses.Diagnostic,
+            AttachmentName: "run.trx",
+            CreatedAtUtc: createdAtUtc,
+            ExpiresAtUtc: expiredAtUtc,
+            ArtifactId: CreateArtifactId(ArtifactOwnerKinds.Run, runOwnerId, ArtifactKindCatalog.RunTrx, suffix + "-run")));
+
+        ArtifactPersistenceResult manualHold = artifactStore.Store(new(
+            ArtifactOwnerKinds.Build,
+            manualHoldOwnerId,
+            ArtifactKindCatalog.BuildSummary,
+            Encoding.UTF8.GetBytes("manual hold artifact " + suffix),
+            "application/json",
+            ArtifactRetentionClasses.ManualHold,
+            AttachmentName: "summary.json",
+            CreatedAtUtc: createdAtUtc,
+            ExpiresAtUtc: expiredAtUtc,
+            ArtifactId: CreateArtifactId(ArtifactOwnerKinds.Build, manualHoldOwnerId, ArtifactKindCatalog.BuildSummary, suffix + "-manual")));
+
+        ArtifactPersistenceResult activeReferenced = artifactStore.Store(new(
+            ArtifactOwnerKinds.Run,
+            activeOwnerId,
+            ArtifactKindCatalog.RunSummary,
+            Encoding.UTF8.GetBytes("active run artifact " + suffix),
+            "application/json",
+            ArtifactRetentionClasses.Standard,
+            AttachmentName: "run-summary.json",
+            CreatedAtUtc: createdAtUtc,
+            ExpiresAtUtc: expiredAtUtc,
+            ArtifactId: CreateArtifactId(ArtifactOwnerKinds.Run, activeOwnerId, ArtifactKindCatalog.RunSummary, suffix + "-active")));
+
+        ArtifactPersistenceResult deferredBulky = artifactStore.Store(new(
+            ArtifactOwnerKinds.Run,
+            deferredOwnerId,
+            ArtifactKindCatalog.RunBlameBundle,
+            Encoding.UTF8.GetBytes("deferred blame bundle " + suffix),
+            "application/octet-stream",
+            ArtifactRetentionClasses.Diagnostic,
+            AttachmentName: "blame.zip",
+            CreatedAtUtc: createdAtUtc,
+            ExpiresAtUtc: expiredAtUtc,
+            ArtifactId: CreateArtifactId(ArtifactOwnerKinds.Run, deferredOwnerId, ArtifactKindCatalog.RunBlameBundle, suffix + "-deferred")));
+
+        var cleanupStore = new RavenArtifactRetentionCleanupStore(result.Store);
+        ArtifactRetentionCleanupPlan plan = cleanupStore.Plan(new(
+            nowUtc,
+            [activeOwnerId]));
+
+        AssertCleanupCandidate(plan, buildCandidate.ArtifactId, ArtifactOwnerKinds.Build);
+        AssertCleanupCandidate(plan, runCandidate.ArtifactId, ArtifactOwnerKinds.Run);
+        AssertRetained(plan, manualHold.ArtifactId, ArtifactCleanupReasonCodes.ManualHold, isAttachmentAware: true);
+        AssertRetained(plan, activeReferenced.ArtifactId, ArtifactCleanupReasonCodes.ActiveOwnerReference, isAttachmentAware: true);
+        ArtifactRetentionCleanupPlanItem deferredDecision = AssertRetained(
+            plan,
+            deferredBulky.ArtifactId,
+            ArtifactCleanupReasonCodes.DeferredMetadataOnly,
+            isAttachmentAware: false);
+        Assert.Contains(ArtifactCleanupReasonCodes.NoFilesystemCleanup, deferredDecision.ReasonCodes, StringComparer.Ordinal);
+        Assert.False(deferredDecision.RequiresFilesystemCleanup);
+
+        CleanupJournalPersistenceResult journalResult = cleanupStore.CreateJournal(
+            plan,
+            createdAtUtc: nowUtc,
+            journalGuid: Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"));
+
+        Assert.Equal("cleanup-journal/2026-04-24/aaaaaaaabbbbccccddddeeeeeeeeeeee", journalResult.CleanupJournalId);
+        Assert.False(journalResult.DeletionExecuted);
+        Assert.True(journalResult.CandidateCount >= 2);
+        Assert.True(journalResult.RetainedCount >= 3);
+
+        CleanupJournalDocument? journal = cleanupStore.LoadJournal(journalResult.CleanupJournalId);
+        Assert.NotNull(journal);
+        Assert.Equal(DocumentCollectionNames.CleanupJournal, ReadCleanupJournalCollectionName(result, journal));
+        Assert.False(journal.DeletionExecuted);
+        Assert.Contains(buildCandidate.ArtifactId, journal.CandidateArtifactIds, StringComparer.Ordinal);
+        Assert.Contains(runCandidate.ArtifactId, journal.CandidateArtifactIds, StringComparer.Ordinal);
+        Assert.Contains(manualHold.ArtifactId, journal.RetainedArtifactIds, StringComparer.Ordinal);
+        Assert.Contains(activeReferenced.ArtifactId, journal.RetainedArtifactIds, StringComparer.Ordinal);
+        Assert.Contains(deferredBulky.ArtifactId, journal.RetainedArtifactIds, StringComparer.Ordinal);
+
+        CleanupJournalArtifactDecisionDocument deferredJournalDecision =
+            Assert.Single(journal.Decisions, decision => decision.ArtifactId == deferredBulky.ArtifactId);
+        Assert.Equal(ArtifactStorageKinds.DeferredExternal, deferredJournalDecision.StorageKind);
+        Assert.Equal(ArtifactCleanupActionKinds.Retain, deferredJournalDecision.ActionKind);
+        Assert.False(deferredJournalDecision.IsAttachmentAware);
+        Assert.False(deferredJournalDecision.RequiresFilesystemCleanup);
+        Assert.Contains(ArtifactCleanupReasonCodes.NoFilesystemCleanup, deferredJournalDecision.ReasonCodes, StringComparer.Ordinal);
+
+        using var verificationSession = result.Store.OpenSession();
+        foreach (string artifactId in new[]
+        {
+            buildCandidate.ArtifactId,
+            runCandidate.ArtifactId,
+            manualHold.ArtifactId,
+            activeReferenced.ArtifactId
+        })
+        {
+            ArtifactMetadataDocument metadata = verificationSession.Load<ArtifactMetadataDocument>(artifactId);
+            Assert.NotNull(metadata);
+            Assert.Single(verificationSession.Advanced.Attachments.GetNames(metadata));
+        }
+
+        ArtifactMetadataDocument deferredMetadata =
+            verificationSession.Load<ArtifactMetadataDocument>(deferredBulky.ArtifactId);
+        Assert.NotNull(deferredMetadata);
+        Assert.Equal(ArtifactStorageKinds.DeferredExternal, deferredMetadata.StorageKind);
+        Assert.Empty(verificationSession.Advanced.Attachments.GetNames(deferredMetadata));
+    }
+
+    private static void AssertCleanupCandidate(
+        ArtifactRetentionCleanupPlan plan,
+        string artifactId,
+        string ownerKind)
+    {
+        ArtifactRetentionCleanupPlanItem item = Assert.Single(plan.Items, candidate => candidate.ArtifactId == artifactId);
+        Assert.Equal(ownerKind, item.OwnerKind);
+        Assert.Equal(ArtifactCleanupActionKinds.CleanupCandidate, item.ActionKind);
+        Assert.Contains(ArtifactCleanupReasonCodes.Expired, item.ReasonCodes, StringComparer.Ordinal);
+        Assert.Contains(ArtifactCleanupReasonCodes.AttachmentBackedPayload, item.ReasonCodes, StringComparer.Ordinal);
+        Assert.True(item.IsAttachmentAware);
+        Assert.False(item.RequiresFilesystemCleanup);
+    }
+
+    private static ArtifactRetentionCleanupPlanItem AssertRetained(
+        ArtifactRetentionCleanupPlan plan,
+        string artifactId,
+        string expectedReasonCode,
+        bool isAttachmentAware)
+    {
+        ArtifactRetentionCleanupPlanItem item = Assert.Single(plan.Items, candidate => candidate.ArtifactId == artifactId);
+        Assert.Equal(ArtifactCleanupActionKinds.Retain, item.ActionKind);
+        Assert.Contains(expectedReasonCode, item.ReasonCodes, StringComparer.Ordinal);
+        Assert.Equal(isAttachmentAware, item.IsAttachmentAware);
+        Assert.False(item.RequiresFilesystemCleanup);
+        return item;
+    }
+
+    private static string? ReadCleanupJournalCollectionName(
+        EmbeddedDatabaseBootstrapResult result,
+        CleanupJournalDocument document)
+    {
+        using var session = result.Store.OpenSession();
+        CleanupJournalDocument loaded = session.Load<CleanupJournalDocument>(document.CleanupJournalId);
         return session.Advanced.GetMetadataFor(loaded)["@collection"]?.ToString();
     }
 
