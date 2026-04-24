@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>RavenDB.TestRunner.McpServer.Build</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RavenDB.TestRunner.McpServer.Artifacts\RavenDB.TestRunner.McpServer.Artifacts.csproj" />
+    <ProjectReference Include="..\RavenDB.TestRunner.McpServer.Shared.Contracts\RavenDB.TestRunner.McpServer.Shared.Contracts.csproj" />
+  </ItemGroup>
+</Project>
