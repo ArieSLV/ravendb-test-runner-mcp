@@ -39,6 +39,17 @@
 - Result: 7 storage tests discovered, executed, and passed.
 - Final solution-level validation is recorded in `IMPLEMENTATION_PROGRESS.md`.
 
+## Corrective pass
+- Commit `da50fab` fixes the artifact identity validation gap found after the first WP_B_003 completion.
+- `RavenArtifactAttachmentStore.Store()` now rejects:
+  - unknown owner kinds,
+  - unknown retention classes,
+  - caller-provided artifact IDs outside the `artifacts/` namespace,
+  - artifact IDs whose owner kind, owner ID path, or artifact kind does not match the write request,
+  - artifact IDs with empty path segments, traversal segments, or backslashes.
+- Generated artifact IDs continue to use `artifacts/<owner-kind>/<owner-id>/<kind>/<guid>` and preserve slash-separated owner document IDs.
+- Regression coverage now proves both canonical caller-provided IDs and generated IDs remain attachment-backed while malformed identity inputs are rejected before persistence.
+
 ## Progress ledger update
 - Mark `WP_B_003_artifact_metadata_and_attachment_thresholds` as `Done`.
 - Keep `ENV-001` open.
