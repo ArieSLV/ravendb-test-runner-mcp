@@ -18,6 +18,10 @@
   - `BuildReadinessToken.status`
 - Added build artifact capture policy for v1 attachment-backed build artifacts and explicit binlog capture vocabulary.
 - Added focused build contract tests.
+- Corrective coverage added for deferred bulky build artifacts:
+  - `build.dump`
+  - `build.diagnostics.oversized`
+  - both route to `deferred_external`, are policy-deferred, and are not in the v1 attachment-backed build artifact set.
 
 ## Touched contracts
 - Implementation remains aligned with:
@@ -38,13 +42,14 @@
 ## Validation performed
 - `git diff --check` passed.
 - `dotnet build .\RavenDB.TestRunner.McpServer.sln -m:1 -v minimal` succeeded with per-command `MSBuildSDKsPath` set to .NET SDK 10.0.203.
-- `dotnet test .\tests\RavenDB.TestRunner.McpServer.Build.Tests\RavenDB.TestRunner.McpServer.Build.Tests.csproj -m:1 -v minimal --logger "trx;LogFileName=wp-d-001-build-contracts.trx"` succeeded.
-- Test result: 7 tests discovered/executed, 7 passed.
+- `dotnet test .\tests\RavenDB.TestRunner.McpServer.Build.Tests\RavenDB.TestRunner.McpServer.Build.Tests.csproj -m:1 -v minimal --logger "trx;LogFileName=wp-d-001-deferred-artifacts.trx"` succeeded.
+- Corrective test result: 8 tests discovered/executed, 8 passed.
 - Runtime reuse/fingerprint integration tests and build artifact/binlog smoke execution were not run because WP_D_001 intentionally does not implement graph analysis, reuse engine, process spawning, or actual build execution.
+- Generated TRX/TestResults artifacts were removed after test-count verification.
 
 ## Progress ledger update
 - Mark `WP_D_001_build_domain_contracts_and_policies` as `Done`.
-- Record implementation commit `174a96e`.
+- Record corrective implementation commit `31b4336`.
 - Keep `ENV-001` open.
 - Keep `WP_D_002+`, `WP_E_*`, MCP host/tools, Web API, UI, and test execution subsystem work not started.
 
