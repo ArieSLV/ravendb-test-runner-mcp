@@ -13,6 +13,7 @@
   - no v1 spillover backend configured,
   - future extension required.
 - Updated `RavenArtifactAttachmentStore` to consume the guardrail policy instead of embedding ad hoc storage/deferred decisions.
+- Added persisted and returned full deferred reason-code lists for deferred artifact decisions while preserving the existing primary `DeferredReason` field.
 - Preserved the v1 storage rule:
   - in-scope artifacts under the practical guardrail remain RavenDB attachment-backed,
   - deferred bulky diagnostics are metadata-only deferred records,
@@ -23,6 +24,16 @@
   - every deferred bulky diagnostic class is non-attachment-backed and non-filesystem-backed,
   - oversized in-scope artifacts are deferred without a filesystem backend,
   - all deferred bulky diagnostic classes persist as `ArtifactRef` metadata with no RavenDB attachment payload.
+  - attachment-backed artifacts persist and return an empty deferred reason-code list.
+  - deferred bulky diagnostics persist and return `deferred_artifact_kind`, `no_v1_spillover_backend_configured`, and `future_extension_required`.
+  - oversized in-scope artifacts persist and return `exceeds_practical_attachment_guardrail`, `no_v1_spillover_backend_configured`, and `future_extension_required`.
+
+## Corrective pass
+- Commit `2c28821` fixes the WP_B_004 review finding where only the primary deferred reason survived storage.
+- `ArtifactMetadataDocument` now persists `DeferredReasonCodes`.
+- `ArtifactPersistenceResult` now exposes `DeferredReasonCodes`.
+- `RavenArtifactAttachmentStore` copies the full guardrail-policy reason list into both persisted metadata and the store result.
+- Attachment-backed artifacts continue to expose no primary deferred reason and an empty full reason list.
 
 ## Touched contracts
 - No design contract documents were changed.
@@ -40,6 +51,9 @@
   `$env:DOTNET_CLI_HOME=(Join-Path (Resolve-Path '.').Path '.tmp-dotnet-home'); $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE='1'; $env:DOTNET_CLI_TELEMETRY_OPTOUT='1'; $env:MSBuildSDKsPath='C:\Program Files\dotnet\sdk\10.0.203\Sdks'; dotnet build .\RavenDB.TestRunner.McpServer.sln -m:1 -v minimal`
 - Targeted storage validation passed:
   `$env:DOTNET_CLI_HOME=(Join-Path (Resolve-Path '.').Path '.tmp-dotnet-home'); $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE='1'; $env:DOTNET_CLI_TELEMETRY_OPTOUT='1'; $env:MSBuildSDKsPath='C:\Program Files\dotnet\sdk\10.0.203\Sdks'; dotnet test .\tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests.csproj -m:1 -v minimal --logger "trx;LogFileName=wp-b-004-deferred-guardrails.trx"`
+- Result: 10 storage tests discovered, executed, and passed.
+- Corrective targeted storage validation passed:
+  `$env:DOTNET_CLI_HOME=(Join-Path (Resolve-Path '.').Path '.tmp-dotnet-home'); $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE='1'; $env:DOTNET_CLI_TELEMETRY_OPTOUT='1'; $env:MSBuildSDKsPath='C:\Program Files\dotnet\sdk\10.0.203\Sdks'; dotnet test .\tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-b-004-deferred-reason-codes-corrective.trx"`
 - Result: 10 storage tests discovered, executed, and passed.
 - Requested semantics command failed before harness execution during the implicit build path with no compiler errors emitted:
   `dotnet run --project .\tests\RavenDB.TestRunner.McpServer.Semantics.Tests\RavenDB.TestRunner.McpServer.Semantics.Tests.csproj -v minimal`
