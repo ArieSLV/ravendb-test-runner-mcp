@@ -135,6 +135,27 @@ public sealed class BuildDomainContractTests
         }
     }
 
+    [Fact]
+    public void BuildArtifactPolicy_RoutesDeferredBuildArtifactsToDeferredExternalStorage()
+    {
+        Assert.Contains(ArtifactKindCatalog.BuildDump, BuildArtifactCapturePolicy.DeferredBuildArtifacts);
+        Assert.Contains(ArtifactKindCatalog.BuildDiagnosticsOversized, BuildArtifactCapturePolicy.DeferredBuildArtifacts);
+
+        foreach (string artifactKind in BuildArtifactCapturePolicy.DeferredBuildArtifacts)
+        {
+            Assert.DoesNotContain(
+                artifactKind,
+                BuildArtifactCapturePolicy.AttachmentBackedBuildArtifactsInV1,
+                StringComparer.Ordinal);
+
+            BuildArtifactStorageDecision route = BuildArtifactCapturePolicy.Route(artifactKind);
+
+            Assert.Equal(ArtifactStorageKinds.DeferredExternal, route.StorageKind);
+            Assert.True(route.IsDeferredByPolicy);
+            Assert.False(route.IsAttachmentBackedInV1);
+        }
+    }
+
     private static BuildPolicy CreatePolicy(
         string mode = BuildPolicyModes.BuildIfMissingOrStale,
         bool captureArtifactsAsAttachments = true)
