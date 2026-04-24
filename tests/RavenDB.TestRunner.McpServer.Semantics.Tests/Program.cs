@@ -73,9 +73,25 @@ internal static class Program
             "v62.capability-matrix.json");
 
         EnsureEqual("xunit.v2", capabilityMatrix.FrameworkFamily, "v6.2 framework family");
+        EnsureEqual("xunit.v2", capabilityMatrix.RunnerFamily, "v6.2 runner family");
+        EnsureEqual("xunit.runner.visualstudio", capabilityMatrix.AdapterFamily, "v6.2 adapter family");
         Ensure(capabilityMatrix.SupportsSlowTestsIssuesProject, "v6.2 should surface SlowTests/Issues support from the fixture.");
         Ensure(capabilityMatrix.SupportsAiEmbeddingsSemantics is false, "v6.2 AI embeddings must remain disabled.");
+        Ensure(capabilityMatrix.SupportsAiConnectionStrings is false, "v6.2 AI connection strings must remain disabled.");
+        Ensure(capabilityMatrix.SupportsAiAgentsSemantics is false, "v6.2 AI agents must remain disabled.");
+        Ensure(capabilityMatrix.SupportsAiTestAttributes is false, "v6.2 AI test attributes must remain disabled.");
         Ensure(capabilityMatrix.SupportsXunitV3SourceInfo is false, "v6.2 must not claim xUnit v3 source info.");
+
+        using var aiMarkerFixture = WorkspaceFixture.CreateV62WithAiMarkers();
+        var aiMarkerInspection = WorkspaceInspector.Scan(aiMarkerFixture.RootPath);
+        var aiMarkerDetection = Detector.Detect(aiMarkerInspection);
+        EnsureEqual(RepoLines.V62, aiMarkerDetection.RepoLine, "v6.2 detection should keep explicit v6.2 routing with xUnit v2 evidence.");
+
+        var v62WithAiMarkers = Router.Route(RepoLines.V62).GetCapabilityMatrix(aiMarkerInspection);
+        Ensure(v62WithAiMarkers.SupportsAiEmbeddingsSemantics is false, "v6.2 AI embeddings remain unsupported even if markers are present.");
+        Ensure(v62WithAiMarkers.SupportsAiConnectionStrings is false, "v6.2 AI connection strings remain unsupported even if markers are present.");
+        Ensure(v62WithAiMarkers.SupportsAiAgentsSemantics is false, "v6.2 AI agents remain unsupported even if markers are present.");
+        Ensure(v62WithAiMarkers.SupportsAiTestAttributes is false, "v6.2 AI test attributes remain unsupported even if markers are present.");
     }
 
     private static void ValidateV71Fixture()

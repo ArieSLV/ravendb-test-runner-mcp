@@ -37,6 +37,16 @@ internal sealed class WorkspaceFixture : IDisposable
         return fixture;
     }
 
+    public static WorkspaceFixture CreateV62WithAiMarkers()
+    {
+        var fixture = CreateV62();
+        fixture.WriteFile("test/SlowTests/AI/Embeddings/AiEmbeddingsTests.cs", "namespace SlowTests.AI.Embeddings; public sealed class AiEmbeddingsTests;");
+        fixture.WriteFile("src/Raven.Server/Documents/AI/ConnectionStrings/AiConnectionStrings.cs", "namespace Raven.Server.Documents.AI.ConnectionStrings; public sealed class AiConnectionStrings;");
+        fixture.WriteFile("src/Raven.Server/Documents/AI/Agents/AiAgentFactAttribute.cs", "namespace Raven.Server.Documents.AI.Agents; public sealed class AiAgentFactAttribute;");
+
+        return fixture;
+    }
+
     public static WorkspaceFixture CreateV71()
     {
         var fixture = Create("v71");
