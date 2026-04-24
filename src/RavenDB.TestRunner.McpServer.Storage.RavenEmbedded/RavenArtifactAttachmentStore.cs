@@ -23,26 +23,21 @@ public sealed class RavenArtifactAttachmentStore
         ArgumentNullException.ThrowIfNull(request);
         ValidateRequest(request);
 
-        V1ArtifactStorageRoute route = V1ArtifactStorageRouter.Route(request.ArtifactKind);
         string artifactId = string.IsNullOrWhiteSpace(request.ArtifactId)
             ? CreateArtifactId(request)
             : request.ArtifactId;
         ValidateArtifactId(request, artifactId);
 
         string sha256 = ComputeSha256(request.Payload);
-        bool exceedsGuardrail = request.Payload.LongLength > options.PracticalAttachmentGuardrailBytes;
-        bool storeAsAttachment = route.IsAttachmentBackedInV1 && exceedsGuardrail is false;
+        V1ArtifactGuardrailDecision guardrailDecision = V1ArtifactGuardrailPolicy.Evaluate(
+            request.ArtifactKind,
+            request.Payload.LongLength,
+            options.PracticalAttachmentGuardrailBytes);
+        bool storeAsAttachment = guardrailDecision.ShouldStoreAttachment;
         string? attachmentName = storeAsAttachment
             ? NormalizeAttachmentName(request.AttachmentName, request.ArtifactKind)
             : null;
-        string? deferredReason = storeAsAttachment
-            ? null
-            : route.IsDeferredByPolicy
-                ? ArtifactDeferredReasons.DeferredArtifactKind
-                : ArtifactDeferredReasons.ExceedsPracticalAttachmentGuardrail;
-        string storageKind = storeAsAttachment
-            ? ArtifactStorageKinds.RavenAttachment
-            : ArtifactStorageKinds.DeferredExternal;
+        string storageKind = guardrailDecision.StorageKind;
         string locator = storeAsAttachment
             ? artifactId + "/" + attachmentName
             : "deferred:" + artifactId;
@@ -64,7 +59,7 @@ public sealed class RavenArtifactAttachmentStore
             CreatedAtUtc = request.CreatedAtUtc ?? DateTime.UtcNow,
             ExpiresAtUtc = request.ExpiresAtUtc,
             Sensitive = request.Sensitive,
-            DeferredReason = deferredReason
+            DeferredReason = guardrailDecision.PrimaryDeferredReason
         };
 
         using (var session = documentStore.OpenSession())
@@ -88,12 +83,12 @@ public sealed class RavenArtifactAttachmentStore
             artifactId,
             storageKind,
             storeAsAttachment,
-            route.IsDeferredByPolicy || exceedsGuardrail,
+            guardrailDecision.IsDeferredByPolicy,
             attachmentName,
             locator,
             request.Payload.LongLength,
             sha256,
-            deferredReason);
+            guardrailDecision.PrimaryDeferredReason);
     }
 
     private static void ValidateRequest(ArtifactWriteRequest request)

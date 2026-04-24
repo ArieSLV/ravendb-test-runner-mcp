@@ -35,6 +35,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             AssertStorageSchemaBaseline(result);
             AssertStaticIndexesQueryPascalCaseProbeDocuments(result);
             AssertArtifactMetadataAndAttachmentPersistence(result);
+            AssertAllDeferredBulkyDiagnosticsPersistAsDeferredMetadata(result);
             AssertArtifactIdentityValidation(result);
 
             string documentId = "artifact-ref-probes/" + Guid.NewGuid().ToString("N");
@@ -362,6 +363,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         Assert.False(deferredResult.IsAttachmentBackedInV1);
         Assert.True(deferredResult.IsDeferredByPolicy);
         Assert.Null(deferredResult.AttachmentName);
+        Assert.StartsWith("deferred:", deferredResult.Locator, StringComparison.Ordinal);
         Assert.Equal(ArtifactDeferredReasons.DeferredArtifactKind, deferredResult.DeferredReason);
 
         ArtifactPersistenceResult oversizedResult = artifactStore.Store(new(
@@ -379,6 +381,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         Assert.False(oversizedResult.IsAttachmentBackedInV1);
         Assert.True(oversizedResult.IsDeferredByPolicy);
         Assert.Null(oversizedResult.AttachmentName);
+        Assert.StartsWith("deferred:", oversizedResult.Locator, StringComparison.Ordinal);
         Assert.Equal(ArtifactDeferredReasons.ExceedsPracticalAttachmentGuardrail, oversizedResult.DeferredReason);
 
         using (var verificationSession = result.Store.OpenSession())
@@ -456,6 +459,51 @@ public sealed class EmbeddedDatabaseBootstrapperTests
                 .ToList();
 
             Assert.Contains(kindMatches, match => match.ArtifactId == attachmentResult.ArtifactId);
+        }
+    }
+
+    private static void AssertAllDeferredBulkyDiagnosticsPersistAsDeferredMetadata(EmbeddedDatabaseBootstrapResult result)
+    {
+        string suffix = Guid.NewGuid().ToString("N");
+        string ownerId = "runs/workspace-" + suffix + "/2026-04-24/" + suffix;
+        byte[] payload = Encoding.UTF8.GetBytes("deferred bulky diagnostic " + suffix);
+        var artifactStore = new RavenArtifactAttachmentStore(result.Store);
+        List<ArtifactPersistenceResult> deferredResults = [];
+
+        foreach (string artifactKind in ArtifactKindCatalog.DeferredBulkyDiagnostics)
+        {
+            ArtifactPersistenceResult deferredResult = artifactStore.Store(new(
+                ArtifactOwnerKinds.Run,
+                ownerId,
+                artifactKind,
+                payload,
+                "application/octet-stream",
+                ArtifactRetentionClasses.Diagnostic,
+                AttachmentName: artifactKind + ".bin",
+                ArtifactId: CreateArtifactId(ArtifactOwnerKinds.Run, ownerId, artifactKind, suffix)));
+
+            Assert.Equal(ArtifactStorageKinds.DeferredExternal, deferredResult.StorageKind);
+            Assert.False(deferredResult.IsAttachmentBackedInV1);
+            Assert.True(deferredResult.IsDeferredByPolicy);
+            Assert.Null(deferredResult.AttachmentName);
+            Assert.StartsWith("deferred:", deferredResult.Locator, StringComparison.Ordinal);
+            Assert.Equal(payload.LongLength, deferredResult.SizeBytes);
+            Assert.Equal(ArtifactDeferredReasons.DeferredArtifactKind, deferredResult.DeferredReason);
+            deferredResults.Add(deferredResult);
+        }
+
+        using var verificationSession = result.Store.OpenSession();
+        foreach (ArtifactPersistenceResult deferredResult in deferredResults)
+        {
+            ArtifactMetadataDocument metadata =
+                verificationSession.Load<ArtifactMetadataDocument>(deferredResult.ArtifactId);
+            Assert.NotNull(metadata);
+            Assert.Equal(ArtifactStorageKinds.DeferredExternal, metadata.StorageKind);
+            Assert.Equal(ownerId, metadata.OwnerId);
+            Assert.Null(metadata.AttachmentName);
+            Assert.Equal(ArtifactDeferredReasons.DeferredArtifactKind, metadata.DeferredReason);
+            Assert.StartsWith("deferred:", metadata.Locator, StringComparison.Ordinal);
+            Assert.Empty(verificationSession.Advanced.Attachments.GetNames(metadata));
         }
     }
 
