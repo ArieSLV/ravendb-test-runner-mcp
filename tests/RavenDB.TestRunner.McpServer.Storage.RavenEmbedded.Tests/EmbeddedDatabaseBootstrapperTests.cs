@@ -4,6 +4,7 @@ using Raven.Client.Documents.Operations.Indexes;
 using Raven.Client.Exceptions;
 using Raven.Client.ServerWide.Operations;
 using RavenDB.TestRunner.McpServer.Artifacts;
+using RavenDB.TestRunner.McpServer.Semantics.Abstractions;
 using RavenDB.TestRunner.McpServer.Shared.Contracts.DocumentConventions;
 using RavenDB.TestRunner.McpServer.Shared.Contracts.EventContracts;
 using RavenDB.TestRunner.McpServer.Storage.RavenEmbedded;
@@ -41,6 +42,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             AssertEventCheckpointPersistence(result);
             AssertRetentionCleanupJournalBaseline(result);
             AssertRetentionCleanupCapUsesArtifactIdOrder(result);
+            AssertSemanticCatalogPersistence(result);
 
             string documentId = "artifact-ref-probes/" + Guid.NewGuid().ToString("N");
 
@@ -926,6 +928,132 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         Assert.All(plan.Items, item => Assert.Equal(ArtifactCleanupActionKinds.CleanupCandidate, item.ActionKind));
     }
 
+    private static void AssertSemanticCatalogPersistence(EmbeddedDatabaseBootstrapResult result)
+    {
+        string suffix = Guid.NewGuid().ToString("N");
+        string workspaceId = "workspace" + suffix;
+        DateTime createdAtUtc = new(2026, 4, 24, 17, 0, 0, DateTimeKind.Utc);
+        var catalogStore = new RavenSemanticCatalogStore(result.Store);
+        TestCategoryCatalogEntry[] categories =
+        [
+            new(
+                "smoke",
+                "Category",
+                "Smoke",
+                ["quick", "fast"],
+                ["core"],
+                [RepoLines.V62, RepoLines.V71, RepoLines.V72]),
+            new(
+                "ai",
+                "Category",
+                "AI",
+                ["artificial-intelligence"],
+                [],
+                [RepoLines.V71, RepoLines.V72])
+        ];
+
+        SemanticCatalogPersistenceResult v62 = catalogStore.Save(CreateSemanticCatalogRequest(
+            workspaceId,
+            "RavenV62Semantics",
+            RepoLines.V62,
+            "sem-v62-" + suffix,
+            "matrix-v62-" + suffix,
+            "catalog-v62-" + suffix,
+            createdAtUtc,
+            CreateCapabilityMatrix(RepoLines.V62, "xunit.v2", supportsAi: false, supportsXunitV3SourceInfo: false),
+            categories));
+
+        SemanticCatalogPersistenceResult v71 = catalogStore.Save(CreateSemanticCatalogRequest(
+            workspaceId,
+            "RavenV71Semantics",
+            RepoLines.V71,
+            "sem-v71-" + suffix,
+            "matrix-v71-" + suffix,
+            "catalog-v71-" + suffix,
+            createdAtUtc,
+            CreateCapabilityMatrix(RepoLines.V71, "xunit.v2", supportsAi: true, supportsXunitV3SourceInfo: false),
+            categories));
+
+        SemanticCatalogPersistenceResult v72 = catalogStore.Save(CreateSemanticCatalogRequest(
+            workspaceId,
+            "RavenV72Semantics",
+            RepoLines.V72,
+            "sem-v72-" + suffix,
+            "matrix-v72-" + suffix,
+            "catalog-v72-" + suffix,
+            createdAtUtc,
+            CreateCapabilityMatrix(RepoLines.V72, "xunit.v3", supportsAi: true, supportsXunitV3SourceInfo: true),
+            categories));
+
+        Assert.Equal("semantic-snapshots/" + workspaceId + "/sem-v62-" + suffix, v62.SemanticSnapshotId);
+        Assert.Equal("capability-matrices/" + workspaceId + "/v7.2/matrix-v72-" + suffix, v72.CapabilityMatrixId);
+        Assert.Equal(2, v72.CategoryCatalogEntryIds.Count);
+
+        SemanticSnapshotDocument? v72Snapshot = catalogStore.LoadSemanticSnapshot(v72.SemanticSnapshotId);
+        Assert.NotNull(v72Snapshot);
+        Assert.Equal("RavenV72Semantics", v72Snapshot.PluginId);
+        Assert.True(v72Snapshot.SupportsAiEmbeddingsSemantics);
+        Assert.True(v72Snapshot.SupportsAiConnectionStrings);
+        Assert.True(v72Snapshot.SupportsAiAgentsSemantics);
+        Assert.True(v72Snapshot.SupportsAiTestAttributes);
+        Assert.Equal(DocumentCollectionNames.SemanticSnapshots, ReadDocumentCollectionName<SemanticSnapshotDocument>(result, v72.SemanticSnapshotId));
+
+        CapabilityMatrixDocument? v62Matrix = catalogStore.LoadCapabilityMatrix(v62.CapabilityMatrixId);
+        CapabilityMatrixDocument? v71Matrix = catalogStore.LoadCapabilityMatrix(v71.CapabilityMatrixId);
+        CapabilityMatrixDocument? v72Matrix = catalogStore.LoadCapabilityMatrix(v72.CapabilityMatrixId);
+        Assert.NotNull(v62Matrix);
+        Assert.NotNull(v71Matrix);
+        Assert.NotNull(v72Matrix);
+        Assert.Equal("xunit.v2", v62Matrix.FrameworkFamily);
+        Assert.False(v62Matrix.Capabilities[CapabilityNames.SupportsAiEmbeddingsSemantics]);
+        Assert.Equal("xunit.v2", v71Matrix.FrameworkFamily);
+        Assert.True(v71Matrix.Capabilities[CapabilityNames.SupportsAiAgentsSemantics]);
+        Assert.Equal("xunit.v3", v72Matrix.FrameworkFamily);
+        Assert.True(v72Matrix.Capabilities[CapabilityNames.SupportsXunitV3SourceInfo]);
+        Assert.Equal(DocumentCollectionNames.CapabilityMatrices, ReadDocumentCollectionName<CapabilityMatrixDocument>(result, v72.CapabilityMatrixId));
+
+        IReadOnlyList<TestCategoryCatalogEntryDocument> v72Catalog = catalogStore.LoadCategoryCatalog(workspaceId, "catalog-v72-" + suffix);
+        Assert.Equal(new[] { "ai", "smoke" }, v72Catalog.Select(entry => entry.CategoryKey).ToArray());
+        Assert.All(v72Catalog, entry => Assert.Equal(v72.SemanticSnapshotId, entry.SemanticSnapshotId));
+        Assert.Equal(new[] { RepoLines.V71, RepoLines.V72 }, v72Catalog[0].RepoLineSupport);
+        Assert.Equal(DocumentCollectionNames.TestCatalogEntries, ReadDocumentCollectionName<TestCategoryCatalogEntryDocument>(result, v72Catalog[0].TestCatalogEntryId));
+
+        using (var querySession = result.Store.OpenSession())
+        {
+            var query = querySession.Advanced
+                .DocumentQuery<SemanticSnapshotDocument>(indexName: "SemanticSnapshots/ByWorkspacePlugin")
+                .WaitForNonStaleResults(TimeSpan.FromSeconds(30))
+                .WhereEquals("workspaceId", workspaceId)
+                .AndAlso()
+                .WhereEquals("pluginId", "RavenV72Semantics");
+            var matches = query.ToList();
+            Assert.Single(matches);
+            Assert.Equal(v72.SemanticSnapshotId, matches[0].SemanticSnapshotId);
+        }
+
+        Assert.Throws<ArgumentException>(() => catalogStore.Save(CreateSemanticCatalogRequest(
+            "bad/workspace",
+            "RavenV72Semantics",
+            RepoLines.V72,
+            "sem-invalid-" + suffix,
+            "matrix-invalid-" + suffix,
+            "catalog-invalid-" + suffix,
+            createdAtUtc,
+            CreateCapabilityMatrix(RepoLines.V72, "xunit.v3", supportsAi: true, supportsXunitV3SourceInfo: true),
+            categories)));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => catalogStore.Save(CreateSemanticCatalogRequest(
+            workspaceId,
+            "RavenV73Semantics",
+            "v7.3",
+            "sem-invalid-line-" + suffix,
+            "matrix-invalid-line-" + suffix,
+            "catalog-invalid-line-" + suffix,
+            createdAtUtc,
+            CreateCapabilityMatrix(RepoLines.V72, "xunit.v3", supportsAi: true, supportsXunitV3SourceInfo: true),
+            categories)));
+    }
+
     private static void AssertCleanupCandidate(
         ArtifactRetentionCleanupPlan plan,
         string artifactId,
@@ -963,6 +1091,16 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         return session.Advanced.GetMetadataFor(loaded)["@collection"]?.ToString();
     }
 
+    private static string? ReadDocumentCollectionName<TDocument>(
+        EmbeddedDatabaseBootstrapResult result,
+        string documentId)
+    {
+        using var session = result.Store.OpenSession();
+        TDocument loaded = session.Load<TDocument>(documentId);
+        Assert.NotNull(loaded);
+        return session.Advanced.GetMetadataFor(loaded)["@collection"]?.ToString();
+    }
+
     private static ArtifactWriteRequest CreateArtifactWriteRequest(
         string ownerId,
         string artifactKind,
@@ -988,6 +1126,54 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         string finalSegment)
     {
         return string.Join('/', "artifacts", ownerKind, ownerId, artifactKind, finalSegment);
+    }
+
+    private static SemanticCatalogPersistenceRequest CreateSemanticCatalogRequest(
+        string workspaceId,
+        string pluginId,
+        string repoLine,
+        string topologyHash,
+        string capabilityMatrixHash,
+        string categoryCatalogVersion,
+        DateTime createdAtUtc,
+        CapabilityMatrix capabilityMatrix,
+        IReadOnlyCollection<TestCategoryCatalogEntry> categories)
+    {
+        return new(
+            workspaceId,
+            pluginId,
+            repoLine,
+            topologyHash,
+            capabilityMatrixHash,
+            categoryCatalogVersion,
+            "attributes-" + repoLine.Replace(".", string.Empty, StringComparison.Ordinal),
+            capabilityMatrix,
+            categories,
+            createdAtUtc);
+    }
+
+    private static CapabilityMatrix CreateCapabilityMatrix(
+        string repoLine,
+        string frameworkFamily,
+        bool supportsAi,
+        bool supportsXunitV3SourceInfo)
+    {
+        return new(
+            repoLine,
+            frameworkFamily,
+            runnerFamily: frameworkFamily,
+            adapterFamily: supportsXunitV3SourceInfo ? "xunit.v3" : "xunit.runner.visualstudio",
+            supportsSlowTestsIssuesProject: string.Equals(repoLine, RepoLines.V72, StringComparison.Ordinal) is false,
+            supportsAiEmbeddingsSemantics: supportsAi,
+            supportsAiConnectionStrings: supportsAi,
+            supportsAiAgentsSemantics: supportsAi,
+            supportsAiTestAttributes: supportsAi,
+            supportsXunitV3SourceInfo,
+            supportsBuildGraphSpecialCases: false,
+            versionSensitivePoints:
+            [
+                repoLine + " persisted capability matrix baseline."
+            ]);
     }
 
     private static void AssertOptimisticConcurrencyIsEnabled(EmbeddedDatabaseBootstrapResult result)
