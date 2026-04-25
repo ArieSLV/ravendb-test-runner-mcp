@@ -23,6 +23,7 @@
   - `preflightWarnings`.
 - Build-to-test dependency handling delegates to `BuildOwnershipModel.ResolveBuildDependency(...)`.
 - Raw expert filters remain isolated from structured selector identity and are reported as runtime-expansion unknowns/warnings.
+- Corrective pass: preflight now rejects a normalized selector carrying `ExpertRawFilter` unless `TestPreflightRequest.ExpertMode` is explicitly true, using `raw_filter_requires_expert_mode`.
 - Deterministic skip predictions are explicitly marked deterministic and non-flaky.
 
 ## Touched contracts
@@ -46,10 +47,10 @@
   `dotnet build .\RavenDB.TestRunner.McpServer.sln -m:1 -v minimal`
 - Result: 0 warnings, 0 errors.
 - TestExecution tests passed:
-  `dotnet test .\tests\RavenDB.TestRunner.McpServer.TestExecution.Tests\RavenDB.TestRunner.McpServer.TestExecution.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-e-002-preflight.trx"`
-- Result: 22 tests discovered, executed, and passed.
+  `dotnet test .\tests\RavenDB.TestRunner.McpServer.TestExecution.Tests\RavenDB.TestRunner.McpServer.TestExecution.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-e-002-raw-filter-expert-boundary.trx"`
+- Result: 23 tests discovered, executed, and passed.
 - Existing Build tests passed:
-  `dotnet test .\tests\RavenDB.TestRunner.McpServer.Build.Tests\RavenDB.TestRunner.McpServer.Build.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-e-002-build-boundary.trx"`
+  `dotnet test .\tests\RavenDB.TestRunner.McpServer.Build.Tests\RavenDB.TestRunner.McpServer.Build.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-e-002-raw-filter-build-boundary.trx"`
 - Result: 70 tests discovered, executed, and passed.
 - Semantics harness passed:
   `dotnet run --no-build --project .\tests\RavenDB.TestRunner.McpServer.Semantics.Tests\RavenDB.TestRunner.McpServer.Semantics.Tests.csproj -v minimal`
@@ -57,7 +58,7 @@
 
 ## Progress ledger update
 - Mark `WP_E_002_preflight_evaluator` as `Done`.
-- Record implementation commit `993a9f0`.
+- Record corrective implementation commit `313d1e1`.
 - Keep `ENV-001` open.
 - Keep `TASK_INDEX.md` unchanged.
 
