@@ -18,6 +18,7 @@
   - `BuildResults` document at `build-results/<build-id>`
 - Added Raven attachment persistence for captured build artifacts through the existing `RavenArtifactAttachmentStore`.
 - Preserved the v1 artifact invariant: in-scope build artifacts are attachment-backed when under the guardrail, oversized artifacts become explicit `deferred_external` metadata, and no filesystem spillover backend is introduced.
+- Corrective boundary pass added deterministic pre-persistence validation so `BuildResult.BuildId` must match `BuildExecution.BuildId`, and `BuildCommandPlan.BuildPlanId` must match `BuildExecution.BuildPlanId`, before any artifact metadata or attachment write can occur.
 
 ## Touched contracts
 - Aligned with `BUILD_SUBSYSTEM.md`:
@@ -55,10 +56,16 @@
 - Semantics harness passed:
   `dotnet run --no-build --project .\tests\RavenDB.TestRunner.McpServer.Semantics.Tests\RavenDB.TestRunner.McpServer.Semantics.Tests.csproj -v minimal`
 - Result: 8 workspace detection and capability checks passed.
+- Corrective boundary validation passed:
+  - `git diff --check`
+  - `dotnet build .\RavenDB.TestRunner.McpServer.sln -m:1 -v minimal`
+  - `dotnet test .\tests\RavenDB.TestRunner.McpServer.Build.Tests\RavenDB.TestRunner.McpServer.Build.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-d-005-boundary-corrective-build.trx"` with 57 tests discovered, executed, and passed
+  - `dotnet test .\tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-d-005-boundary-corrective-storage.trx"` with 10 tests discovered, executed, and passed
+  - `dotnet run --no-build --project .\tests\RavenDB.TestRunner.McpServer.Semantics.Tests\RavenDB.TestRunner.McpServer.Semantics.Tests.csproj -v minimal` with 8 workspace detection and capability checks passed
 
 ## Progress ledger update
 - Mark `WP_D_005_build_artifacts_status_and_binlog_capture` as `Done`.
-- Record implementation commit `87ea024`.
+- Record implementation commit `240b5de`.
 - Keep `ENV-001` open.
 - Keep `TASK_INDEX.md` unchanged.
 
