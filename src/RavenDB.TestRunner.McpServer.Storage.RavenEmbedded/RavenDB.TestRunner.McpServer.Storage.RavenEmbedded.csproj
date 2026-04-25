@@ -5,6 +5,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RavenDB.TestRunner.McpServer.Artifacts\RavenDB.TestRunner.McpServer.Artifacts.csproj" />
+    <ProjectReference Include="..\RavenDB.TestRunner.McpServer.Build\RavenDB.TestRunner.McpServer.Build.csproj" />
     <ProjectReference Include="..\RavenDB.TestRunner.McpServer.Semantics.Abstractions\RavenDB.TestRunner.McpServer.Semantics.Abstractions.csproj" />
     <ProjectReference Include="..\RavenDB.TestRunner.McpServer.Shared.Contracts\RavenDB.TestRunner.McpServer.Shared.Contracts.csproj" />
   </ItemGroup>

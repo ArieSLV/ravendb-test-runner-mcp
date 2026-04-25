@@ -4,9 +4,11 @@ using Raven.Client.Documents.Operations.Indexes;
 using Raven.Client.Exceptions;
 using Raven.Client.ServerWide.Operations;
 using RavenDB.TestRunner.McpServer.Artifacts;
+using RavenDB.TestRunner.McpServer.Build;
 using RavenDB.TestRunner.McpServer.Semantics.Abstractions;
 using RavenDB.TestRunner.McpServer.Shared.Contracts.DocumentConventions;
 using RavenDB.TestRunner.McpServer.Shared.Contracts.EventContracts;
+using RavenDB.TestRunner.McpServer.Shared.Contracts.StateMachineContracts;
 using RavenDB.TestRunner.McpServer.Storage.RavenEmbedded;
 
 namespace RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests;
@@ -42,6 +44,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             AssertEventCheckpointPersistence(result);
             AssertRetentionCleanupJournalBaseline(result);
             AssertRetentionCleanupCapUsesArtifactIdOrder(result);
+            AssertBuildResultAndArtifactPersistence(result);
             AssertSemanticCatalogPersistence(result);
 
             string documentId = "artifact-ref-probes/" + Guid.NewGuid().ToString("N");
@@ -928,6 +931,130 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         Assert.All(plan.Items, item => Assert.Equal(ArtifactCleanupActionKinds.CleanupCandidate, item.ActionKind));
     }
 
+    private static void AssertBuildResultAndArtifactPersistence(EmbeddedDatabaseBootstrapResult result)
+    {
+        string suffix = Guid.NewGuid().ToString("N");
+        DateTimeOffset now = new(2026, 4, 25, 11, 0, 0, TimeSpan.Zero);
+        string buildId = "builds/" + suffix + "/2026-04-25/" + Guid.NewGuid().ToString("N");
+        string binlogDirectory = Path.Combine(Path.GetTempPath(), "RTRMS", "wp-d-005-binlogs", suffix);
+        Directory.CreateDirectory(binlogDirectory);
+        string binlogPath = Path.Combine(binlogDirectory, "build.binlog");
+        File.WriteAllBytes(binlogPath, [9, 8, 7, 6]);
+
+        try
+        {
+            BuildExecutionEngineResult engineResult = CreateBuildExecutionEngineResult(
+                buildId,
+                BuildResultStatuses.Succeeded,
+                BuildExecutionStates.Completed,
+                BuildExecutionPhases.Completed,
+                now,
+                [
+                    new(BuildOutputStreams.Stdout, "storage stdout " + suffix, 0, now),
+                    new(BuildOutputStreams.Stderr, "storage stderr " + suffix, 1, now.AddMilliseconds(1))
+                ]);
+            BuildCommandPlan commandPlan = CreateBuildCommandPlan(buildId, ["/bl:" + binlogPath]);
+            var store = new RavenBuildResultStore(result.Store);
+
+            BuildResultPersistenceResult persisted = store.Save(new(
+                engineResult,
+                commandPlan,
+                CaptureBinlog: true,
+                OutputPaths: ["bin/Release/App.dll"],
+                CapturedAtUtc: now.UtcDateTime));
+
+            Assert.Equal(buildId, persisted.BuildId);
+            Assert.Equal("build-results/" + buildId, persisted.BuildResultId);
+            Assert.Equal(BuildResultStatuses.Succeeded, persisted.Result.Status);
+            Assert.NotNull(persisted.Result.OutputsManifest);
+            Assert.Equal(["bin/Release/App.dll"], persisted.Result.OutputsManifest.OutputPaths);
+            Assert.Contains(persisted.Result.Artifacts, artifact => artifact.ArtifactKind == ArtifactKindCatalog.BuildCommand);
+            Assert.Contains(persisted.Result.Artifacts, artifact => artifact.ArtifactKind == ArtifactKindCatalog.BuildSummary);
+            Assert.Contains(persisted.Result.Artifacts, artifact => artifact.ArtifactKind == ArtifactKindCatalog.BuildOutputManifest);
+            Assert.Contains(persisted.Result.Artifacts, artifact => artifact.ArtifactKind == ArtifactKindCatalog.BuildStdout);
+            Assert.Contains(persisted.Result.Artifacts, artifact => artifact.ArtifactKind == ArtifactKindCatalog.BuildStderr);
+            Assert.Contains(persisted.Result.Artifacts, artifact => artifact.ArtifactKind == ArtifactKindCatalog.BuildMerged);
+            Assert.Contains(persisted.Result.Artifacts, artifact => artifact.ArtifactKind == ArtifactKindCatalog.BuildBinlog);
+
+            using (var session = result.Store.OpenSession())
+            {
+                BuildExecutionDocument executionDocument = session.Load<BuildExecutionDocument>(buildId);
+                Assert.NotNull(executionDocument);
+                Assert.Equal(DocumentCollectionNames.BuildExecutions, session.Advanced.GetMetadataFor(executionDocument)["@collection"]?.ToString());
+                Assert.Equal(BuildExecutionStates.Completed, executionDocument.State);
+                Assert.Equal("workspaces/" + suffix, executionDocument.WorkspaceId);
+
+                BuildResultDocument resultDocument = session.Load<BuildResultDocument>("build-results/" + buildId);
+                Assert.NotNull(resultDocument);
+                Assert.Equal(DocumentCollectionNames.BuildResults, session.Advanced.GetMetadataFor(resultDocument)["@collection"]?.ToString());
+                Assert.Equal(BuildResultStatuses.Succeeded, resultDocument.Status);
+                Assert.Equal(persisted.Result.Artifacts.Count, resultDocument.Artifacts.Count);
+
+                foreach (BuildArtifactReference reference in resultDocument.Artifacts)
+                {
+                    ArtifactMetadataDocument metadata = session.Load<ArtifactMetadataDocument>(reference.ArtifactId);
+                    Assert.NotNull(metadata);
+                    Assert.Equal(DocumentCollectionNames.ArtifactRefs, session.Advanced.GetMetadataFor(metadata)["@collection"]?.ToString());
+                    Assert.Equal(ArtifactOwnerKinds.Build, metadata.OwnerKind);
+                    Assert.Equal(buildId, metadata.OwnerId);
+                    Assert.Equal(reference.ArtifactKind, metadata.ArtifactKind);
+                    Assert.Equal(reference.StorageKind, metadata.StorageKind);
+
+                    if (metadata.StorageKind == ArtifactStorageKinds.RavenAttachment)
+                    {
+                        Assert.Single(session.Advanced.Attachments.GetNames(metadata));
+                    }
+                }
+            }
+
+            string oversizedBuildId = "builds/" + suffix + "/2026-04-25/" + Guid.NewGuid().ToString("N");
+            BuildExecutionEngineResult oversizedResult = CreateBuildExecutionEngineResult(
+                oversizedBuildId,
+                BuildResultStatuses.Failed,
+                BuildExecutionStates.FailedTerminal,
+                BuildExecutionPhases.Completed,
+                now,
+                [new(BuildOutputStreams.Stdout, new string('x', 128), 0, now)],
+                BuildExecutionFailureReasonCodes.ProcessExitCodeNonZero);
+            var constrainedStore = new RavenBuildResultStore(
+                result.Store,
+                new RavenArtifactAttachmentStoreOptions(32));
+
+            BuildResultPersistenceResult constrainedPersisted = constrainedStore.Save(new(
+                oversizedResult,
+                CreateBuildCommandPlan(oversizedBuildId, []),
+                CaptureBinlog: false,
+                OutputPaths: [],
+                CapturedAtUtc: now.UtcDateTime));
+
+            BuildArtifactReference stdoutReference =
+                Assert.Single(constrainedPersisted.Result.Artifacts, artifact => artifact.ArtifactKind == ArtifactKindCatalog.BuildStdout);
+            using var oversizedSession = result.Store.OpenSession();
+            ArtifactMetadataDocument stdoutMetadata = oversizedSession.Load<ArtifactMetadataDocument>(stdoutReference.ArtifactId);
+            Assert.NotNull(stdoutMetadata);
+            Assert.Equal(ArtifactStorageKinds.DeferredExternal, stdoutMetadata.StorageKind);
+            Assert.Null(stdoutMetadata.AttachmentName);
+            Assert.Empty(oversizedSession.Advanced.Attachments.GetNames(stdoutMetadata));
+            Assert.Equal(ArtifactDeferredReasons.ExceedsPracticalAttachmentGuardrail, stdoutMetadata.DeferredReason);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(binlogDirectory))
+                {
+                    Directory.Delete(binlogDirectory, recursive: true);
+                }
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+
     private static void AssertSemanticCatalogPersistence(EmbeddedDatabaseBootstrapResult result)
     {
         string suffix = Guid.NewGuid().ToString("N");
@@ -1187,6 +1314,92 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         Assert.Equal(isAttachmentAware, item.IsAttachmentAware);
         Assert.False(item.RequiresFilesystemCleanup);
         return item;
+    }
+
+    private static BuildExecutionEngineResult CreateBuildExecutionEngineResult(
+        string buildId,
+        string resultStatus,
+        string executionState,
+        string executionPhase,
+        DateTimeOffset now,
+        IReadOnlyList<BuildProcessOutputLine> output,
+        string? failureClassification = null)
+    {
+        BuildExecution execution = new(
+            buildId,
+            "build-plans/" + buildId["builds/".Length..],
+            "workspaces/" + buildId.Split('/')[1],
+            executionState,
+            executionPhase,
+            CurrentStepIndex: 0,
+            now.UtcDateTime,
+            now.AddSeconds(1).UtcDateTime,
+            BuildFingerprintId: "build-fingerprints/" + buildId.Split('/')[1],
+            ReadinessTokenId: null,
+            CanCancel: false);
+        BuildProcessResult processResult = new(
+            resultStatus == BuildResultStatuses.Failed ? 1 : 0,
+            TimedOut: resultStatus == BuildResultStatuses.TimedOut,
+            Cancelled: resultStatus == BuildResultStatuses.Cancelled,
+            output,
+            now,
+            now.AddSeconds(1));
+        BuildStepExecutionResult stepResult = new(
+            "001-build",
+            BuildCommandStepKinds.Build,
+            BuildExecutionStates.Building,
+            processResult,
+            failureClassification is null ? [] : [failureClassification]);
+        BuildResult buildResult = new(
+            buildId,
+            resultStatus,
+            failureClassification,
+            OutputsManifest: null,
+            Artifacts: [],
+            ReproCommand: "dotnet build RavenDB.sln",
+            ReuseDecision: null,
+            Warnings: failureClassification is null ? [] : [failureClassification]);
+
+        return new(execution, buildResult, [stepResult]);
+    }
+
+    private static BuildCommandPlan CreateBuildCommandPlan(string buildId, IReadOnlyList<string> additionalArguments)
+    {
+        BuildChildProcessEnvironment environment = new(
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["PATH"] = "C:/tools",
+                ["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1"
+            },
+            [],
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["PATH"] = "C:/tools",
+                ["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1"
+            });
+        string[] arguments =
+        [
+            "build",
+            "RavenDB.sln",
+            "--configuration",
+            "Release",
+            .. additionalArguments
+        ];
+        BuildProcessStartInfo command = new(
+            "dotnet",
+            arguments,
+            Path.GetTempPath(),
+            environment.Variables,
+            TimeSpan.FromMinutes(5),
+            BuildCommandStepKinds.Build);
+
+        return new(
+            "build-plans/" + buildId["builds/".Length..],
+            Path.GetTempPath(),
+            environment,
+            [new("001-build", BuildCommandStepKinds.Build, "build RavenDB.sln", BuildExecutionStates.Building, IsMaterialBuildStep: true, command)],
+            [],
+            "dotnet build RavenDB.sln --configuration Release");
     }
 
     private static string? ReadCleanupJournalCollectionName(
