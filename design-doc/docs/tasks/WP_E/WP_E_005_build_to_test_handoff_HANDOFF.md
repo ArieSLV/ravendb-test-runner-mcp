@@ -27,6 +27,7 @@
 - Corrective provenance pass:
   - readiness-token handoffs with an available token payload now reject when `LinkedBuildId` conflicts with `BuildReadinessToken.BuildId`;
   - readiness-token handoffs now reject when `BuildReuseDecision.ExistingBuildId` conflicts with the token build ID;
+  - linked-build handoffs now reject when `LinkedBuildId` conflicts with `BuildReuseDecision.ExistingBuildId`, including cases without a readiness-token payload;
   - rejected provenance mismatch handoffs produce blocked run plans with no executable steps or artifact descriptors and are rejected by the scheduler before runner invocation.
 
 ## Accepted handoff cases
@@ -46,6 +47,7 @@
 - Readiness token workspace mismatch.
 - Linked build/readiness token build ID mismatch.
 - Build reuse existing-build/readiness token build ID mismatch.
+- Linked build/build reuse existing-build mismatch without readiness-token payload.
 
 ## Touched contracts
 - Aligned with `BUILD_SUBSYSTEM.md`:
@@ -72,10 +74,10 @@
   `dotnet build .\RavenDB.TestRunner.McpServer.sln -m:1 -v minimal`
 - Result: 0 warnings, 0 errors.
 - TestExecution tests passed:
-  `dotnet test .\tests\RavenDB.TestRunner.McpServer.TestExecution.Tests\RavenDB.TestRunner.McpServer.TestExecution.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-e-005-provenance-corrective.trx"`
-- Result: 60 tests discovered, executed, and passed.
+  `dotnet test .\tests\RavenDB.TestRunner.McpServer.TestExecution.Tests\RavenDB.TestRunner.McpServer.TestExecution.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-e-005-linked-build-provenance-corrective.trx"`
+- Result: 62 tests discovered, executed, and passed.
 - Existing Build tests passed:
-  `dotnet test .\tests\RavenDB.TestRunner.McpServer.Build.Tests\RavenDB.TestRunner.McpServer.Build.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-e-005-provenance-build-boundary.trx"`
+  `dotnet test .\tests\RavenDB.TestRunner.McpServer.Build.Tests\RavenDB.TestRunner.McpServer.Build.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-e-005-linked-build-provenance-build-boundary.trx"`
 - Result: 70 tests discovered, executed, and passed.
 - Semantics harness passed:
   `dotnet run --no-build --project .\tests\RavenDB.TestRunner.McpServer.Semantics.Tests\RavenDB.TestRunner.McpServer.Semantics.Tests.csproj -v minimal`
@@ -83,7 +85,7 @@
 
 ## Progress ledger update
 - Mark `WP_E_005_build_to_test_handoff` as `Done`.
-- Record implementation commit `6a67748`.
+- Record implementation commit `b53cb8d`.
 - Keep `ENV-001` open.
 - Keep `TASK_INDEX.md` unchanged.
 
