@@ -179,6 +179,71 @@ public sealed class BuildToTestHandoffTests
         Assert.Empty(plan.Steps);
     }
 
+    [Fact]
+    public void ReadinessTokenHandoff_RejectsConflictingLinkedBuildProvenance()
+    {
+        BuildReadinessToken token = CreateReadinessToken(BuildReadinessTokenStatuses.Ready);
+        NormalizedTestSelector selector = selectorEngine.Normalize(new(Categories: ["Smoke"]));
+
+        TestPreflightResult preflight = CreatePreflight(
+            selector,
+            CreatePolicy(BuildPolicyModes.RequireExistingReadyBuild),
+            linkedReadinessTokenId: token.ReadinessTokenId,
+            linkedReadinessToken: token,
+            linkedBuildId: "builds/ws/2026-04-25/conflicting");
+        TestRunPlan plan = planner.Create(CreatePlanningRequest(selector, preflight));
+        var runner = new FakeRunProcessRunner(TestRunProcessOutcomes.Succeeded, exitCode: 0);
+
+        TestRunSchedulingException exception = Assert.Throws<TestRunSchedulingException>(() =>
+            new TestRunScheduler(runner).Schedule(CreateScheduleRequest(plan)));
+
+        Assert.Equal(BuildToTestHandoffKinds.ReadinessToken, preflight.BuildHandoff.Kind);
+        Assert.Equal(BuildToTestHandoffStatuses.Rejected, preflight.BuildHandoff.Status);
+        Assert.False(preflight.BuildHandoff.AllowsTestExecutionToProceed);
+        Assert.Contains(BuildToTestHandoffReasonCodes.LinkedBuildMismatch, preflight.BuildHandoff.ReasonCodes);
+        Assert.Equal(TestRunPlanStatuses.Blocked, plan.Status);
+        Assert.Empty(plan.Steps);
+        Assert.Empty(plan.ArtifactDescriptors);
+        Assert.Contains(BuildToTestHandoffReasonCodes.LinkedBuildMismatch, plan.BlockerReasonCodes);
+        Assert.Equal(TestRunSchedulingReasonCodes.RunPlanBlocked, exception.ReasonCode);
+        Assert.Equal(0, runner.InvocationCount);
+    }
+
+    [Fact]
+    public void ReadinessTokenHandoff_RejectsConflictingReuseExistingBuildProvenance()
+    {
+        BuildReadinessToken token = CreateReadinessToken(BuildReadinessTokenStatuses.Ready);
+        NormalizedTestSelector selector = selectorEngine.Normalize(new(Categories: ["Smoke"]));
+        BuildReuseDecision reuseDecision = new(
+            BuildReuseDecisionKinds.ReusedExisting,
+            [BuildReuseReasonCodes.CurrentFingerprintMatches],
+            ExistingBuildId: "builds/ws/2026-04-25/conflicting",
+            NewBuildRequired: false);
+
+        TestPreflightResult preflight = CreatePreflight(
+            selector,
+            CreatePolicy(BuildPolicyModes.RequireExistingReadyBuild),
+            linkedReadinessTokenId: token.ReadinessTokenId,
+            linkedReadinessToken: token,
+            buildReuseDecision: reuseDecision);
+        TestRunPlan plan = planner.Create(CreatePlanningRequest(selector, preflight));
+        var runner = new FakeRunProcessRunner(TestRunProcessOutcomes.Succeeded, exitCode: 0);
+
+        TestRunSchedulingException exception = Assert.Throws<TestRunSchedulingException>(() =>
+            new TestRunScheduler(runner).Schedule(CreateScheduleRequest(plan)));
+
+        Assert.Equal(BuildToTestHandoffKinds.ReadinessToken, preflight.BuildHandoff.Kind);
+        Assert.Equal(BuildToTestHandoffStatuses.Rejected, preflight.BuildHandoff.Status);
+        Assert.False(preflight.BuildHandoff.AllowsTestExecutionToProceed);
+        Assert.Contains(BuildToTestHandoffReasonCodes.BuildReuseExistingBuildMismatch, preflight.BuildHandoff.ReasonCodes);
+        Assert.Equal(TestRunPlanStatuses.Blocked, plan.Status);
+        Assert.Empty(plan.Steps);
+        Assert.Empty(plan.ArtifactDescriptors);
+        Assert.Contains(BuildToTestHandoffReasonCodes.BuildReuseExistingBuildMismatch, plan.BlockerReasonCodes);
+        Assert.Equal(TestRunSchedulingReasonCodes.RunPlanBlocked, exception.ReasonCode);
+        Assert.Equal(0, runner.InvocationCount);
+    }
+
     private TestPreflightResult CreatePreflight(
         NormalizedTestSelector selector,
         BuildPolicy buildPolicy,

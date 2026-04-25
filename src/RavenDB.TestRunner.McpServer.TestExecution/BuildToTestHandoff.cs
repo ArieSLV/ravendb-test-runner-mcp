@@ -118,6 +118,32 @@ public sealed class BuildToTestHandoffEvaluator
                 [BuildToTestHandoffReasonCodes.ReadinessTokenNotReady, request.LinkedReadinessToken.Status]);
         }
 
+        if (!string.IsNullOrWhiteSpace(request.BuildLinkage.LinkedBuildId) &&
+            !string.Equals(
+                request.BuildLinkage.LinkedBuildId,
+                request.LinkedReadinessToken.BuildId,
+                StringComparison.Ordinal))
+        {
+            return Reject(
+                BuildToTestHandoffKinds.ReadinessToken,
+                request,
+                resolution,
+                [BuildToTestHandoffReasonCodes.LinkedBuildMismatch]);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.BuildLinkage.BuildReuseDecision?.ExistingBuildId) &&
+            !string.Equals(
+                request.BuildLinkage.BuildReuseDecision.ExistingBuildId,
+                request.LinkedReadinessToken.BuildId,
+                StringComparison.Ordinal))
+        {
+            return Reject(
+                BuildToTestHandoffKinds.ReadinessToken,
+                request,
+                resolution,
+                [BuildToTestHandoffReasonCodes.BuildReuseExistingBuildMismatch]);
+        }
+
         return Accept(
             BuildToTestHandoffKinds.ReadinessToken,
             request,
@@ -278,7 +304,9 @@ public static class BuildToTestHandoffReasonCodes
 {
     public const string BuildHandoffAmbiguous = "build_handoff_ambiguous";
     public const string BuildReuseRejected = "build_reuse_rejected";
+    public const string BuildReuseExistingBuildMismatch = "build_reuse_existing_build_mismatch";
     public const string ExpertSkipBuildHandoffAccepted = "expert_skip_build_handoff_accepted";
+    public const string LinkedBuildMismatch = "linked_build_mismatch";
     public const string LinkedBuildHandoffAccepted = "linked_build_handoff_accepted";
     public const string ReadinessTokenHandoffAccepted = "readiness_token_handoff_accepted";
     public const string ReadinessTokenIdMismatch = "readiness_token_id_mismatch";
