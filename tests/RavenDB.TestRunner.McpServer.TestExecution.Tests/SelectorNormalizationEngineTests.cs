@@ -150,6 +150,33 @@ public sealed class SelectorNormalizationEngineTests
     }
 
     [Fact]
+    public void BuildBoundary_RejectsExpertSkipWithoutExpertMode()
+    {
+        TestExecutionBoundaryException exception = Assert.Throws<TestExecutionBoundaryException>(() => TestExecutionBuildBoundary.Validate(new(
+            RequestsHiddenBuildExecution: false,
+            BuildPolicyMode: BuildPolicyModes.ExpertSkipBuild,
+            ExpertMode: false)));
+
+        Assert.Equal(BuildPolicyReasonCodes.ExpertModeRequired, exception.ReasonCode);
+        Assert.DoesNotContain(BuildPolicyReasonCodes.ExpertSkipBuildAccepted, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildBoundary_AcceptsExpertSkipOnlyWithExpertMode()
+    {
+        TestExecutionBuildBoundaryDecision decision = TestExecutionBuildBoundary.Validate(new(
+            RequestsHiddenBuildExecution: false,
+            BuildPolicyMode: BuildPolicyModes.ExpertSkipBuild,
+            ExpertMode: true));
+
+        Assert.Equal(TestExecutionBuildBoundary.BuildSubsystemOwner, decision.BuildOwner);
+        Assert.False(decision.HiddenBuildExecutionAllowed);
+        Assert.True(decision.ExpertMode);
+        Assert.Contains(BuildPolicyReasonCodes.ExpertSkipBuildAccepted, decision.ReasonCodes);
+        Assert.DoesNotContain(BuildPolicyReasonCodes.ExpertModeRequired, decision.ReasonCodes);
+    }
+
+    [Fact]
     public void SourceBoundary_DoesNotIntroduceExecutionHostOrTransportSurfaces()
     {
         string sourceRoot = FindSourceRoot();

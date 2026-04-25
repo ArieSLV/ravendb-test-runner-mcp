@@ -249,6 +249,14 @@ public static class TestExecutionBuildBoundary
                 "Build policy modes crossing the test-execution boundary must be known build subsystem policy modes.");
         }
 
+        if (string.Equals(request.BuildPolicyMode, BuildPolicyModes.ExpertSkipBuild, StringComparison.Ordinal) &&
+            !request.ExpertMode)
+        {
+            throw new TestExecutionBoundaryException(
+                BuildPolicyReasonCodes.ExpertModeRequired,
+                "Expert skip build requires explicit expert mode at the test execution boundary.");
+        }
+
         var reasonCodes = new List<string>
         {
             TestExecutionBoundaryReasonCodes.BuildSubsystemOwnsBuildOrchestration,
