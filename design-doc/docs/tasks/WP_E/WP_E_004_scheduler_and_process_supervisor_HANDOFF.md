@@ -25,6 +25,10 @@
 - Blocked plans are rejected before runner invocation.
 - Cancellation and timeout produce explicit lifecycle snapshots and terminal results.
 - No real process execution implementation was added; tests use a fake runner and no product code invokes `dotnet test`.
+- Corrective active-state pass:
+  - active run registration now validates both workspace and run ID before mutation and rejects duplicate active run IDs with `run_already_active`;
+  - duplicate run ID rejection does not leave the workspace active-run registry partially mutated;
+  - process-runner exceptions now return a deterministic terminal `failed_terminal` result with `host_crashed` failure classification and release active run state.
 
 ## Touched contracts
 - Aligned with `STATE_MACHINES.md`:
@@ -52,8 +56,8 @@
   `dotnet build .\RavenDB.TestRunner.McpServer.sln -m:1 -v minimal`
 - Result: 0 warnings, 0 errors.
 - TestExecution tests passed:
-  `dotnet test .\tests\RavenDB.TestRunner.McpServer.TestExecution.Tests\RavenDB.TestRunner.McpServer.TestExecution.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-e-004-scheduler.trx"`
-- Result: 47 tests discovered, executed, and passed.
+  `dotnet test .\tests\RavenDB.TestRunner.McpServer.TestExecution.Tests\RavenDB.TestRunner.McpServer.TestExecution.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-e-004-active-state-corrective.trx"`
+- Result: 49 tests discovered, executed, and passed.
 - Existing Build tests passed:
   `dotnet test .\tests\RavenDB.TestRunner.McpServer.Build.Tests\RavenDB.TestRunner.McpServer.Build.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-e-004-build-boundary.trx"`
 - Result: 70 tests discovered, executed, and passed.
@@ -63,7 +67,7 @@
 
 ## Progress ledger update
 - Mark `WP_E_004_scheduler_and_process_supervisor` as `Done`.
-- Record implementation commit `3cfe362`.
+- Record implementation commit `fd985c6`.
 - Keep `ENV-001` open.
 - Keep `TASK_INDEX.md` unchanged.
 
