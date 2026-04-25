@@ -28,6 +28,7 @@ public sealed class RavenBuildResultStore
         ArgumentNullException.ThrowIfNull(request.CommandPlan);
 
         BuildDocumentIds.ValidateBuildId(request.ExecutionResult.Execution.BuildId);
+        ValidatePersistenceBoundary(request);
 
         BuildArtifactCapturePlan capturePlan = captureService.CreatePlan(new(
             request.ExecutionResult,
@@ -77,6 +78,29 @@ public sealed class RavenBuildResultStore
             persistedArtifacts);
     }
 
+    private static void ValidatePersistenceBoundary(BuildResultPersistenceRequest request)
+    {
+        if (!string.Equals(
+                request.ExecutionResult.Result.BuildId,
+                request.ExecutionResult.Execution.BuildId,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                BuildResultPersistenceReasonCodes.BuildResultExecutionMismatch +
+                ": BuildResult.BuildId must match BuildExecution.BuildId before persistence.");
+        }
+
+        if (!string.Equals(
+                request.CommandPlan.BuildPlanId,
+                request.ExecutionResult.Execution.BuildPlanId,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                BuildResultPersistenceReasonCodes.BuildPlanCommandPlanMismatch +
+                ": BuildCommandPlan.BuildPlanId must match BuildExecution.BuildPlanId before persistence.");
+        }
+    }
+
     public BuildExecutionDocument? LoadExecution(string buildId)
     {
         BuildDocumentIds.ValidateBuildId(buildId);
@@ -92,6 +116,13 @@ public sealed class RavenBuildResultStore
         using var session = documentStore.OpenSession();
         return session.Load<BuildResultDocument>(BuildDocumentIds.CreateBuildResultId(buildId));
     }
+}
+
+public static class BuildResultPersistenceReasonCodes
+{
+    public const string BuildResultExecutionMismatch = "build_result_execution_mismatch";
+
+    public const string BuildPlanCommandPlanMismatch = "build_plan_command_plan_mismatch";
 }
 
 public static class BuildDocumentIds

@@ -1036,6 +1036,53 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             Assert.Null(stdoutMetadata.AttachmentName);
             Assert.Empty(oversizedSession.Advanced.Attachments.GetNames(stdoutMetadata));
             Assert.Equal(ArtifactDeferredReasons.ExceedsPracticalAttachmentGuardrail, stdoutMetadata.DeferredReason);
+
+            string resultMismatchBuildId = "builds/" + suffix + "/2026-04-25/" + Guid.NewGuid().ToString("N");
+            BuildExecutionEngineResult resultMismatch = CreateBuildExecutionEngineResult(
+                resultMismatchBuildId,
+                BuildResultStatuses.Succeeded,
+                BuildExecutionStates.Completed,
+                BuildExecutionPhases.Completed,
+                now,
+                [new(BuildOutputStreams.Stdout, "mismatched result stdout " + suffix, 0, now)]);
+            BuildExecutionEngineResult resultMismatchRequest = resultMismatch with
+            {
+                Result = resultMismatch.Result with
+                {
+                    BuildId = "builds/" + suffix + "/2026-04-25/" + Guid.NewGuid().ToString("N")
+                }
+            };
+
+            InvalidOperationException resultMismatchException = Assert.Throws<InvalidOperationException>(() => store.Save(new(
+                resultMismatchRequest,
+                CreateBuildCommandPlan(resultMismatchBuildId, []),
+                CaptureBinlog: false,
+                OutputPaths: [],
+                CapturedAtUtc: now.UtcDateTime)));
+            Assert.Contains(BuildResultPersistenceReasonCodes.BuildResultExecutionMismatch, resultMismatchException.Message, StringComparison.Ordinal);
+            AssertNoBuildResultPersistence(result, resultMismatchBuildId);
+
+            string planMismatchBuildId = "builds/" + suffix + "/2026-04-25/" + Guid.NewGuid().ToString("N");
+            BuildExecutionEngineResult planMismatch = CreateBuildExecutionEngineResult(
+                planMismatchBuildId,
+                BuildResultStatuses.Succeeded,
+                BuildExecutionStates.Completed,
+                BuildExecutionPhases.Completed,
+                now,
+                [new(BuildOutputStreams.Stdout, "mismatched plan stdout " + suffix, 0, now)]);
+            BuildCommandPlan mismatchedCommandPlan = CreateBuildCommandPlan(planMismatchBuildId, []) with
+            {
+                BuildPlanId = "build-plans/" + suffix + "/2026-04-25/" + Guid.NewGuid().ToString("N")
+            };
+
+            InvalidOperationException planMismatchException = Assert.Throws<InvalidOperationException>(() => store.Save(new(
+                planMismatch,
+                mismatchedCommandPlan,
+                CaptureBinlog: false,
+                OutputPaths: [],
+                CapturedAtUtc: now.UtcDateTime)));
+            Assert.Contains(BuildResultPersistenceReasonCodes.BuildPlanCommandPlanMismatch, planMismatchException.Message, StringComparison.Ordinal);
+            AssertNoBuildResultPersistence(result, planMismatchBuildId);
         }
         finally
         {
@@ -1053,6 +1100,20 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             {
             }
         }
+    }
+
+    private static void AssertNoBuildResultPersistence(
+        EmbeddedDatabaseBootstrapResult result,
+        string buildId)
+    {
+        var store = new RavenBuildResultStore(result.Store);
+        Assert.Null(store.LoadExecution(buildId));
+        Assert.Null(store.LoadResult(buildId));
+
+        using var session = result.Store.OpenSession();
+        ArtifactMetadataDocument[] artifactMetadata = session.Advanced
+            .LoadStartingWith<ArtifactMetadataDocument>("artifacts/build/" + buildId + "/", null, 0, 128);
+        Assert.Empty(artifactMetadata);
     }
 
     private static void AssertSemanticCatalogPersistence(EmbeddedDatabaseBootstrapResult result)
