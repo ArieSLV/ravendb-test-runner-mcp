@@ -1278,6 +1278,29 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         Assert.Equal(token.ReadinessTokenId, reused.Execution.ReadinessTokenId);
         Assert.Equal(BuildResultStatuses.Reused, reused.Result.Status);
 
+        string rejectedReadinessBuildId = "builds/" + suffix + "/2026-04-25/" + Guid.NewGuid().ToString("N");
+        BuildReadinessInvalidation invalidReadyStatus = new(
+            token.ReadinessTokenId,
+            BuildReadinessTokenStatuses.Ready,
+            BuildReadinessTokenStatuses.Ready,
+            [BuildReuseReasonCodes.OutputsMissing]);
+        InvalidOperationException invalidReadyStatusException = Assert.Throws<InvalidOperationException>(() => buildResultStore.Save(new(
+            CreateBuildExecutionEngineResult(
+                rejectedReadinessBuildId,
+                BuildResultStatuses.Failed,
+                BuildExecutionStates.FailedTerminal,
+                BuildExecutionPhases.Completed,
+                now,
+                [new(BuildOutputStreams.Stderr, "invalid readiness target " + suffix, 0, now)],
+                BuildExecutionFailureReasonCodes.ProcessExitCodeNonZero),
+            CreateBuildCommandPlan(rejectedReadinessBuildId, []),
+            CaptureBinlog: false,
+            OutputPaths: [],
+            CapturedAtUtc: now.UtcDateTime,
+            Readiness: new(MaterialBuildFingerprint: null, token, invalidReadyStatus))));
+        Assert.Contains(BuildReadinessIntegrationReasonCodes.InvalidInvalidationTargetStatus, invalidReadyStatusException.Message, StringComparison.Ordinal);
+        AssertNoBuildResultPersistence(result, rejectedReadinessBuildId);
+
         BuildReadinessInvalidation invalidation = new(
             token.ReadinessTokenId,
             BuildReadinessTokenStatuses.Ready,

@@ -92,7 +92,7 @@ public sealed class BuildReadinessIntegrationService
                     ": reused build results require the existing readiness token that authorized reuse.");
             }
 
-            ValidateExistingReadinessForReuse(request.ExistingReadinessToken, reuseDecision);
+            ValidateExistingReadinessForReuse(request.ExistingReadinessToken, reuseDecision, executionResult.Execution);
             linkedToken = request.ExistingReadinessToken;
 
             return new(
@@ -145,6 +145,13 @@ public sealed class BuildReadinessIntegrationService
             throw new InvalidOperationException(
                 BuildReadinessIntegrationReasonCodes.InvalidationStatusMismatch +
                 ": readiness invalidation previous status must match the existing readiness token status.");
+        }
+
+        if (!BuildReadinessTokenStatuses.TerminalValidityStates.Contains(invalidation.NewStatus, StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException(
+                BuildReadinessIntegrationReasonCodes.InvalidInvalidationTargetStatus +
+                ": readiness invalidation target status must be a terminal validity state.");
         }
 
         return request.ExistingReadinessToken with
@@ -210,8 +217,16 @@ public sealed class BuildReadinessIntegrationService
 
     private static void ValidateExistingReadinessForReuse(
         BuildReadinessToken token,
-        BuildReuseDecision reuseDecision)
+        BuildReuseDecision reuseDecision,
+        BuildExecution execution)
     {
+        if (string.IsNullOrWhiteSpace(reuseDecision.ExistingBuildId))
+        {
+            throw new InvalidOperationException(
+                BuildReadinessIntegrationReasonCodes.ExistingReadinessBuildRequired +
+                ": reused build decisions must identify the existing build that supplied readiness.");
+        }
+
         if (!string.Equals(token.Status, BuildReadinessTokenStatuses.Ready, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
@@ -219,12 +234,26 @@ public sealed class BuildReadinessIntegrationService
                 ": reused build results require an existing ready token.");
         }
 
-        if (!string.IsNullOrWhiteSpace(reuseDecision.ExistingBuildId) &&
-            !string.Equals(token.BuildId, reuseDecision.ExistingBuildId, StringComparison.Ordinal))
+        if (!string.Equals(token.BuildId, reuseDecision.ExistingBuildId, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 BuildReadinessIntegrationReasonCodes.ExistingReadinessBuildMismatch +
                 ": reused build decision must reference the existing readiness token build.");
+        }
+
+        if (!string.Equals(token.WorkspaceId, execution.WorkspaceId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                BuildReadinessIntegrationReasonCodes.ExistingReadinessWorkspaceMismatch +
+                ": reused build readiness token workspace must match the build execution workspace.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(execution.BuildFingerprintId) &&
+            !string.Equals(execution.BuildFingerprintId, token.FingerprintId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                BuildReadinessIntegrationReasonCodes.ExistingReadinessFingerprintMismatch +
+                ": reused build execution fingerprint must match the linked readiness token fingerprint.");
         }
     }
 
@@ -263,12 +292,16 @@ public sealed record BuildReadinessProjection(
 public static class BuildReadinessIntegrationReasonCodes
 {
     public const string BuildResultExecutionMismatch = "build_readiness_result_execution_mismatch";
+    public const string ExistingReadinessBuildRequired = "existing_readiness_build_required";
     public const string ExistingReadinessBuildMismatch = "existing_readiness_build_mismatch";
+    public const string ExistingReadinessFingerprintMismatch = "existing_readiness_fingerprint_mismatch";
     public const string ExistingReadinessNotReady = "existing_readiness_not_ready";
     public const string ExistingReadinessReused = "existing_readiness_reused";
     public const string ExistingReadinessTokenRequired = "existing_readiness_token_required";
+    public const string ExistingReadinessWorkspaceMismatch = "existing_readiness_workspace_mismatch";
     public const string ExpertSkipWithoutReadiness = "expert_skip_without_readiness";
     public const string FingerprintExecutionMismatch = "build_readiness_fingerprint_execution_mismatch";
+    public const string InvalidInvalidationTargetStatus = "readiness_invalidation_invalid_target_status";
     public const string InvalidationStatusMismatch = "readiness_invalidation_status_mismatch";
     public const string InvalidationTokenMismatch = "readiness_invalidation_token_mismatch";
     public const string InvalidationTokenRequired = "readiness_invalidation_token_required";

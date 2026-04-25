@@ -111,6 +111,91 @@ public sealed class BuildReadinessIntegrationTests
     }
 
     [Fact]
+    public void AcceptedReuse_RejectsMissingExistingBuildId()
+    {
+        BuildFingerprint fingerprint = CreateFingerprint();
+        BuildReadinessToken existingToken = new BuildReuseEngine().IssueReadyToken(
+            "builds/ws-1/2026-04-25/existing",
+            fingerprint,
+            Now.AddHours(-1).UtcDateTime);
+        BuildReuseDecision reuseDecision = new(
+            BuildReuseDecisionKinds.ReusedExisting,
+            [BuildReuseReasonCodes.CurrentFingerprintMatches],
+            ExistingBuildId: null,
+            NewBuildRequired: false);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => new BuildReadinessIntegrationService().Integrate(new(
+            CreateEngineResult(
+                BuildResultStatuses.Reused,
+                BuildExecutionStates.Completed,
+                BuildExecutionPhases.FinalizingReuse,
+                reuseDecision: reuseDecision),
+            MaterialBuildFingerprint: null,
+            existingToken,
+            ReadinessInvalidation: null,
+            Now.UtcDateTime)));
+
+        Assert.Contains(BuildReadinessIntegrationReasonCodes.ExistingReadinessBuildRequired, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AcceptedReuse_RejectsReadinessTokenFromDifferentWorkspace()
+    {
+        BuildFingerprint otherWorkspaceFingerprint = CreateFingerprint("workspaces/other-ws", "build-fingerprints/other-fingerprint");
+        BuildReadinessToken otherWorkspaceToken = new BuildReuseEngine().IssueReadyToken(
+            "builds/other-ws/2026-04-25/existing",
+            otherWorkspaceFingerprint,
+            Now.AddHours(-1).UtcDateTime);
+        BuildReuseDecision reuseDecision = new(
+            BuildReuseDecisionKinds.ReusedExisting,
+            [BuildReuseReasonCodes.CurrentFingerprintMatches],
+            otherWorkspaceToken.BuildId,
+            NewBuildRequired: false);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => new BuildReadinessIntegrationService().Integrate(new(
+            CreateEngineResult(
+                BuildResultStatuses.Reused,
+                BuildExecutionStates.Completed,
+                BuildExecutionPhases.FinalizingReuse,
+                reuseDecision: reuseDecision),
+            MaterialBuildFingerprint: null,
+            otherWorkspaceToken,
+            ReadinessInvalidation: null,
+            Now.UtcDateTime)));
+
+        Assert.Contains(BuildReadinessIntegrationReasonCodes.ExistingReadinessWorkspaceMismatch, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AcceptedReuse_RejectsConflictingPrepopulatedExecutionFingerprint()
+    {
+        BuildFingerprint fingerprint = CreateFingerprint();
+        BuildReadinessToken existingToken = new BuildReuseEngine().IssueReadyToken(
+            "builds/ws-1/2026-04-25/existing",
+            fingerprint,
+            Now.AddHours(-1).UtcDateTime);
+        BuildReuseDecision reuseDecision = new(
+            BuildReuseDecisionKinds.ReusedExisting,
+            [BuildReuseReasonCodes.CurrentFingerprintMatches],
+            existingToken.BuildId,
+            NewBuildRequired: false);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => new BuildReadinessIntegrationService().Integrate(new(
+            CreateEngineResult(
+                BuildResultStatuses.Reused,
+                BuildExecutionStates.Completed,
+                BuildExecutionPhases.FinalizingReuse,
+                buildFingerprintId: "build-fingerprints/conflicting",
+                reuseDecision: reuseDecision),
+            MaterialBuildFingerprint: null,
+            existingToken,
+            ReadinessInvalidation: null,
+            Now.UtcDateTime)));
+
+        Assert.Contains(BuildReadinessIntegrationReasonCodes.ExistingReadinessFingerprintMismatch, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Invalidation_ProducesUpdatedTokenWithoutCollapsingStatusVocabulary()
     {
         BuildFingerprint fingerprint = CreateFingerprint();
@@ -137,6 +222,30 @@ public sealed class BuildReadinessIntegrationTests
         Assert.Equal(BuildResultStatuses.Failed, result.ExecutionResult.Result.Status);
         Assert.NotEqual(result.ExecutionResult.Execution.State, result.UpdatedReadinessToken.Status);
         Assert.NotEqual(result.ExecutionResult.Result.Status, result.UpdatedReadinessToken.Status);
+    }
+
+    [Fact]
+    public void Invalidation_RejectsReadyAsTargetStatus()
+    {
+        BuildFingerprint fingerprint = CreateFingerprint();
+        BuildReadinessToken existingToken = new BuildReuseEngine().IssueReadyToken(
+            "builds/ws-1/2026-04-25/existing",
+            fingerprint,
+            Now.AddHours(-1).UtcDateTime);
+        BuildReadinessInvalidation invalidation = new(
+            existingToken.ReadinessTokenId,
+            BuildReadinessTokenStatuses.Ready,
+            BuildReadinessTokenStatuses.Ready,
+            [BuildReuseReasonCodes.OutputsMissing]);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => new BuildReadinessIntegrationService().Integrate(new(
+            CreateEngineResult(BuildResultStatuses.Failed, BuildExecutionStates.FailedTerminal, BuildExecutionPhases.Completed),
+            MaterialBuildFingerprint: null,
+            existingToken,
+            invalidation,
+            Now.UtcDateTime)));
+
+        Assert.Contains(BuildReadinessIntegrationReasonCodes.InvalidInvalidationTargetStatus, exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -181,10 +290,12 @@ public sealed class BuildReadinessIntegrationTests
         return new(execution, result, []);
     }
 
-    private static BuildFingerprint CreateFingerprint() =>
+    private static BuildFingerprint CreateFingerprint(
+        string workspaceId = "workspaces/ws-1",
+        string fingerprintId = "build-fingerprints/fingerprint-001") =>
         new(
-            "build-fingerprints/fingerprint-001",
-            "workspaces/ws-1",
+            fingerprintId,
+            workspaceId,
             "v7.2",
             "abc123",
             "clean",
