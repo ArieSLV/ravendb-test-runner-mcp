@@ -97,6 +97,26 @@ public sealed class TestRunSchedulerTests
     }
 
     [Fact]
+    public void DuplicateRunIdAcrossWorkspaces_IsRejectedWithoutPoisoningWorkspace()
+    {
+        var runner = new FakeRunProcessRunner(TestRunProcessOutcomes.Pending, exitCode: null);
+        var scheduler = new TestRunScheduler(runner);
+        TestRunPlan firstPlan = CreatePlan(workspaceId: "workspaces/a", runPlanId: "run-plans/a/active");
+        TestRunPlan duplicateRunIdPlan = CreatePlan(workspaceId: "workspaces/b", runPlanId: "run-plans/b/duplicate");
+        TestRunPlan laterWorkspaceBPlan = CreatePlan(workspaceId: "workspaces/b", runPlanId: "run-plans/b/later");
+
+        TestRunScheduleResult first = scheduler.Schedule(CreateScheduleRequest(firstPlan, runId: "runs/shared/active"));
+        TestRunSchedulingException exception = Assert.Throws<TestRunSchedulingException>(() =>
+            scheduler.Schedule(CreateScheduleRequest(duplicateRunIdPlan, runId: "runs/shared/active")));
+        TestRunScheduleResult later = scheduler.Schedule(CreateScheduleRequest(laterWorkspaceBPlan, runId: "runs/b/later"));
+
+        Assert.Equal(TestRunSchedulerStatuses.Active, first.SchedulerStatus);
+        Assert.Equal(TestRunSchedulingReasonCodes.RunAlreadyActive, exception.ReasonCode);
+        Assert.Equal(TestRunSchedulerStatuses.Active, later.SchedulerStatus);
+        Assert.Equal(2, runner.InvocationCount);
+    }
+
+    [Fact]
     public void CancelBeforeStart_MapsToCancelledAndDoesNotInvokeRunner()
     {
         var runner = new FakeRunProcessRunner(TestRunProcessOutcomes.Succeeded, exitCode: 0);
@@ -193,6 +213,26 @@ public sealed class TestRunSchedulerTests
         Assert.Equal(TestRunResultStatuses.TimedOut, result.ResultStatus);
         Assert.Equal(FailureClassificationKinds.RunTimedOut, result.FailureClassification);
         Assert.Equal(RunExecutionStates.TimedOut, result.Snapshots.Last().State);
+    }
+
+    [Fact]
+    public void RunnerException_MapsToHostCrashedAndReleasesActiveRun()
+    {
+        var runner = new ThrowingThenPendingRunProcessRunner();
+        var scheduler = new TestRunScheduler(runner);
+        TestRunPlan crashingPlan = CreatePlan(runPlanId: "run-plans/ws/crash");
+        TestRunPlan laterPlan = CreatePlan(runPlanId: "run-plans/ws/later");
+
+        TestRunScheduleResult crashed = scheduler.Schedule(CreateScheduleRequest(crashingPlan, runId: "runs/ws/crash"));
+        TestRunScheduleResult later = scheduler.Schedule(CreateScheduleRequest(laterPlan, runId: "runs/ws/later"));
+
+        Assert.True(crashed.RunnerInvoked);
+        Assert.Equal(TestRunSchedulerStatuses.Terminal, crashed.SchedulerStatus);
+        Assert.Equal(TestRunResultStatuses.Failed, crashed.ResultStatus);
+        Assert.Equal(FailureClassificationKinds.HostCrashed, crashed.FailureClassification);
+        Assert.Equal(RunExecutionStates.FailedTerminal, crashed.Snapshots.Last().State);
+        Assert.Equal(TestRunSchedulerStatuses.Active, later.SchedulerStatus);
+        Assert.Equal(2, runner.InvocationCount);
     }
 
     [Fact]
@@ -341,6 +381,25 @@ public sealed class TestRunSchedulerTests
             InvocationCount++;
             LastRequest = request;
             return new(outcome, exitCode, outcome == TestRunProcessOutcomes.Pending ? null : CompletedAtUtc, []);
+        }
+    }
+
+    private sealed class ThrowingThenPendingRunProcessRunner : ITestRunProcessRunner
+    {
+        public int InvocationCount { get; private set; }
+
+        public TestRunProcessRequest? LastRequest { get; private set; }
+
+        public TestRunProcessResult Run(TestRunProcessRequest request)
+        {
+            InvocationCount++;
+            LastRequest = request;
+            if (InvocationCount == 1)
+            {
+                throw new InvalidOperationException("runner_failed");
+            }
+
+            return new(TestRunProcessOutcomes.Pending, ExitCode: null, CompletedAtUtc: null, ReasonCodes: []);
         }
     }
 }

@@ -37,16 +37,51 @@ public sealed class TestRunScheduler
             request.Timeout,
             request.RequestedAtUtc,
             snapshots);
-        activeByWorkspace.Add(request.Plan.WorkspaceId, activeRun);
-        activeByRunId.Add(request.RunId, activeRun);
+        RegisterActive(activeRun);
 
-        TestRunProcessResult processResult = runner.Run(new(
-            request.RunId,
-            request.Plan.RunPlanId,
-            request.Plan.WorkspaceId,
-            request.Plan.Steps,
-            request.Plan.ArtifactDescriptors,
-            request.Timeout));
+        TestRunProcessResult processResult;
+        try
+        {
+            processResult = runner.Run(new(
+                request.RunId,
+                request.Plan.RunPlanId,
+                request.Plan.WorkspaceId,
+                request.Plan.Steps,
+                request.Plan.ArtifactDescriptors,
+                request.Timeout));
+        }
+        catch (Exception)
+        {
+            activeRun.Snapshots.Add(CreateSnapshot(
+                request,
+                RunExecutionStates.Executing,
+                RunExecutionPhases.Executing,
+                CurrentStepIndex: 0,
+                progress: 0.50m,
+                resultStatus: null,
+                failureClassification: null,
+                canCancel: false,
+                observedAtUtc: request.RequestedAtUtc));
+            activeRun.Snapshots.Add(CreateSnapshot(
+                request,
+                RunExecutionStates.FailedTerminal,
+                RunExecutionPhases.Failed,
+                CurrentStepIndex: request.Plan.Steps.Count,
+                progress: 1m,
+                TestRunResultStatuses.Failed,
+                FailureClassificationKinds.HostCrashed,
+                canCancel: false,
+                observedAtUtc: request.RequestedAtUtc));
+            RemoveActive(activeRun);
+
+            return CreateResult(
+                request,
+                activeRun.Snapshots,
+                TestRunSchedulerStatuses.Terminal,
+                TestRunResultStatuses.Failed,
+                FailureClassificationKinds.HostCrashed,
+                runnerInvoked: true);
+        }
 
         if (string.Equals(processResult.Outcome, TestRunProcessOutcomes.Pending, StringComparison.Ordinal))
         {
@@ -426,6 +461,40 @@ public sealed class TestRunScheduler
         activeByRunId.Remove(activeRun.RunId);
     }
 
+    private void RegisterActive(ActiveRun activeRun)
+    {
+        if (activeByWorkspace.ContainsKey(activeRun.WorkspaceId))
+        {
+            throw new TestRunSchedulingException(
+                TestRunSchedulingReasonCodes.WorkspaceRunAlreadyActive,
+                "Only one active run is allowed per workspace.");
+        }
+
+        if (activeByRunId.ContainsKey(activeRun.RunId))
+        {
+            throw new TestRunSchedulingException(
+                TestRunSchedulingReasonCodes.RunAlreadyActive,
+                "Run IDs must be unique while a run is active.");
+        }
+
+        if (!activeByWorkspace.TryAdd(activeRun.WorkspaceId, activeRun))
+        {
+            throw new TestRunSchedulingException(
+                TestRunSchedulingReasonCodes.WorkspaceRunAlreadyActive,
+                "Only one active run is allowed per workspace.");
+        }
+
+        if (activeByRunId.TryAdd(activeRun.RunId, activeRun))
+        {
+            return;
+        }
+
+        activeByWorkspace.Remove(activeRun.WorkspaceId);
+        throw new TestRunSchedulingException(
+            TestRunSchedulingReasonCodes.RunAlreadyActive,
+            "Run IDs must be unique while a run is active.");
+    }
+
     private static void ValidateScheduleRequest(TestRunScheduleRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -665,6 +734,7 @@ public static class RunExecutionPhases
 
 public static class FailureClassificationKinds
 {
+    public const string HostCrashed = "host_crashed";
     public const string RunCancelled = "run_cancelled";
     public const string RunTimedOut = "run_timed_out";
     public const string TestFailures = "test_failures";
@@ -674,6 +744,7 @@ public static class TestRunSchedulingReasonCodes
 {
     public const string InvalidTimeout = "invalid_timeout";
     public const string MissingAcceptedBuildReference = "missing_accepted_build_reference";
+    public const string RunAlreadyActive = "run_already_active";
     public const string RunNotActive = "run_not_active";
     public const string RunPlanBlocked = "run_plan_blocked";
     public const string RunPlanHasNoExecutableSteps = "run_plan_has_no_executable_steps";
