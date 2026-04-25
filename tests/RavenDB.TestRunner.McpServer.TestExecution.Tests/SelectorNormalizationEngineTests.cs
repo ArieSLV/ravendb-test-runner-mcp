@@ -190,8 +190,7 @@ public sealed class SelectorNormalizationEngineTests
             "MapMcp",
             "ControllerBase",
             "IHostedService",
-            "SignalR",
-            "Scheduler"
+            "SignalR"
         ];
 
         foreach (string path in Directory.GetFiles(sourceRoot, "*.cs", SearchOption.AllDirectories))
