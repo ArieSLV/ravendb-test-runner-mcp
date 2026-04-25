@@ -22,6 +22,7 @@
   - timeout
   - accepted reuse/no-material-build path
 - Corrective reuse consistency pass: added command-plan validation so zero command steps are accepted only for `reused_existing` or `skipped_by_policy` no-material-build decisions, while rejected existing-readiness decisions, empty material-build plans, and command steps paired with accepted reuse are rejected before any process runner invocation.
+- Corrective planner consistency pass: `BuildCommandPlanner` now returns an empty no-material-build plan only for accepted `reused_existing` and `skipped_by_policy` decisions, and rejects `rejected_existing` or unsupported no-build decisions before returning a command plan.
 - Added an explicit build-subsystem ownership guard so non-build owners cannot execute hidden builds.
 
 ## Touched contracts
@@ -49,8 +50,8 @@
   `dotnet build .\RavenDB.TestRunner.McpServer.sln -m:1 -v minimal`
 - Result: 0 warnings, 0 errors.
 - Targeted build tests passed:
-  `dotnet test .\tests\RavenDB.TestRunner.McpServer.Build.Tests\RavenDB.TestRunner.McpServer.Build.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-d-004-reuse-consistency-corrective.trx"`
-- Result: 47 build tests discovered, executed, and passed.
+  `dotnet test .\tests\RavenDB.TestRunner.McpServer.Build.Tests\RavenDB.TestRunner.McpServer.Build.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-d-004-planner-reuse-consistency-corrective.trx"`
+- Result: 51 build tests discovered, executed, and passed.
 - Semantics harness passed:
   `dotnet run --no-build --project .\tests\RavenDB.TestRunner.McpServer.Semantics.Tests\RavenDB.TestRunner.McpServer.Semantics.Tests.csproj -v minimal`
 - Result: 8 workspace detection and capability checks passed.
@@ -58,7 +59,7 @@
 
 ## Progress ledger update
 - Mark `WP_D_004_build_scheduler_and_execution_engine` as `Done`.
-- Record corrective implementation commit `db4d5ae`.
+- Record corrective implementation commit `1aa9bf0`.
 - Keep `ENV-001` open; WP_D_004 adds deterministic child-process environment handling but does not mutate global/user environment variables.
 - Keep `TASK_INDEX.md` unchanged.
 
