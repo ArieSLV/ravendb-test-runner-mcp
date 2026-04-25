@@ -13,6 +13,14 @@ public sealed class TestPreflightEvaluator
         ArgumentNullException.ThrowIfNull(request.BuildPolicy);
         ArgumentNullException.ThrowIfNull(request.Facts);
 
+        if (request.Selector.ExpertRawFilter is not null && !request.ExpertMode)
+        {
+            throw new SelectorNormalizationException(
+                SelectorNormalizationReasonCodes.RawFilterRequiresExpertMode,
+                SelectorFieldNames.RawFilter,
+                "Raw expert filters require explicit expert mode at the preflight boundary.");
+        }
+
         BuildLinkage buildLinkage = new(
             request.LinkedBuildId,
             request.LinkedBuildPlanId,

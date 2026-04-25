@@ -128,6 +128,25 @@ public sealed class PreflightEvaluatorTests
     }
 
     [Fact]
+    public void RawExpertFilterWithoutPreflightExpertMode_IsRejected()
+    {
+        NormalizedTestSelector rawExpert = selectorEngine.Normalize(new(
+            Categories: ["Smoke"],
+            RawFilter: "FullyQualifiedName~CanRun",
+            ExpertMode: true));
+
+        SelectorNormalizationException exception = Assert.Throws<SelectorNormalizationException>(() =>
+            preflightEvaluator.Evaluate(CreateRequest(
+                rawExpert,
+                CreatePolicy(BuildPolicyModes.RequireExistingReadyBuild),
+                linkedReadinessTokenId: "build-readiness/ws/fingerprint",
+                expertMode: false)));
+
+        Assert.Equal(SelectorNormalizationReasonCodes.RawFilterRequiresExpertMode, exception.ReasonCode);
+        Assert.Equal(SelectorFieldNames.RawFilter, exception.FieldName);
+    }
+
+    [Fact]
     public void DeterministicSkipsAndUnknowns_AreStableAcrossInputOrdering()
     {
         NormalizedTestSelector firstSelector = selectorEngine.Normalize(new(
@@ -150,10 +169,12 @@ public sealed class PreflightEvaluatorTests
         TestPreflightResult first = preflightEvaluator.Evaluate(CreateRequest(
             firstSelector,
             CreatePolicy(BuildPolicyModes.BuildIfMissingOrStale),
+            expertMode: true,
             facts: facts));
         TestPreflightResult second = preflightEvaluator.Evaluate(CreateRequest(
             secondSelector,
             CreatePolicy(BuildPolicyModes.BuildIfMissingOrStale),
+            expertMode: true,
             facts: facts));
 
         Assert.Equal(first.SelectionSummary.Description, second.SelectionSummary.Description);
