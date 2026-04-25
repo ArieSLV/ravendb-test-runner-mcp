@@ -25,6 +25,9 @@
 - A pre-populated `BuildExecution.BuildFingerprintId` must match the linked readiness token fingerprint; it is not overwritten silently.
 - Readiness invalidation target status must be one of the terminal validity states: `invalidated`, `superseded`, or `missing_outputs`; `ready` is rejected as an invalidation target.
 - Storage integration coverage verifies rejected readiness validation happens before `BuildExecution`, `BuildResult`, artifact metadata, or attachments are persisted.
+- Review finding fixed: accepted reuse must now carry explicit current fingerprint proof on `BuildExecution.BuildFingerprintId`.
+- `reused_existing` no longer copies a blank execution fingerprint from the linked readiness token; the execution fingerprint must be nonblank and equal to the token fingerprint before readiness can be linked.
+- Storage integration coverage verifies blank execution fingerprint rejection happens before `BuildExecution`, `BuildResult`, artifact metadata, or attachments are persisted.
 
 ## Touched contracts
 - Aligned with `BUILD_SUBSYSTEM.md`:
@@ -65,10 +68,16 @@
   - `dotnet test .\tests\RavenDB.TestRunner.McpServer.Build.Tests\RavenDB.TestRunner.McpServer.Build.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-d-006-readiness-boundary-corrective-build.trx"` with 69 tests discovered, executed, and passed
   - `dotnet test .\tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-d-006-readiness-boundary-corrective-storage.trx"` with 10 tests discovered, executed, and passed
   - `dotnet run --no-build --project .\tests\RavenDB.TestRunner.McpServer.Semantics.Tests\RavenDB.TestRunner.McpServer.Semantics.Tests.csproj -v minimal` with 8 workspace detection and capability checks passed
+- Corrective current-fingerprint proof validation passed:
+  - `git diff --check`
+  - `dotnet build .\RavenDB.TestRunner.McpServer.sln -m:1 -v minimal`
+  - `dotnet test .\tests\RavenDB.TestRunner.McpServer.Build.Tests\RavenDB.TestRunner.McpServer.Build.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-d-006-current-fingerprint-proof-build.trx"` with 70 tests discovered, executed, and passed
+  - `dotnet test .\tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests\RavenDB.TestRunner.McpServer.Storage.RavenEmbedded.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-d-006-current-fingerprint-proof-storage.trx"` with 10 tests discovered, executed, and passed
+  - `dotnet run --no-build --project .\tests\RavenDB.TestRunner.McpServer.Semantics.Tests\RavenDB.TestRunner.McpServer.Semantics.Tests.csproj -v minimal` with 8 workspace detection and capability checks passed
 
 ## Progress ledger update
 - Mark `WP_D_006_build_readiness_integration` as `Done`.
-- Record implementation commit `4f6c588`.
+- Record implementation commit `68f4e47`.
 - Keep `ENV-001` open.
 - Keep `TASK_INDEX.md` unchanged.
 
