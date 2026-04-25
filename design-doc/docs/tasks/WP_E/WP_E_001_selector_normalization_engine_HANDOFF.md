@@ -19,6 +19,12 @@
 - Added a selector summary surface with project, assembly, class, method, category, and raw-filter counts plus stable description text.
 - Added a small build-boundary contract that keeps hidden build execution forbidden and records that build orchestration remains owned by the build subsystem.
 
+## Corrective passes
+- Review finding fixed: `expert_skip_build` at the test-execution build boundary now requires explicit expert mode.
+- `TestExecutionBuildBoundary.Validate(...)` rejects `expert_skip_build` with `ExpertMode=false` using `expert_mode_required`.
+- `expert_skip_build_accepted` is emitted only when `ExpertMode=true`.
+- Hidden-build rejection and non-expert build policy modes remain unchanged.
+
 ## Touched contracts
 - Aligned with `DOMAIN_MODEL.md`:
   - raw filters are not canonical internal identity;
@@ -53,10 +59,16 @@
 - Semantics harness passed:
   `dotnet run --no-build --project .\tests\RavenDB.TestRunner.McpServer.Semantics.Tests\RavenDB.TestRunner.McpServer.Semantics.Tests.csproj -v minimal`
 - Result: 8 workspace detection and capability checks passed.
+- Corrective expert-skip boundary validation passed:
+  - `git diff --check`
+  - `dotnet build .\RavenDB.TestRunner.McpServer.sln -m:1 -v minimal`
+  - `dotnet test .\tests\RavenDB.TestRunner.McpServer.TestExecution.Tests\RavenDB.TestRunner.McpServer.TestExecution.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-e-001-expert-skip-corrective.trx"` with 14 tests discovered, executed, and passed
+  - `dotnet test .\tests\RavenDB.TestRunner.McpServer.Build.Tests\RavenDB.TestRunner.McpServer.Build.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-e-001-expert-skip-build-boundary.trx"` with 70 tests discovered, executed, and passed
+  - `dotnet run --no-build --project .\tests\RavenDB.TestRunner.McpServer.Semantics.Tests\RavenDB.TestRunner.McpServer.Semantics.Tests.csproj -v minimal` with 8 workspace detection and capability checks passed
 
 ## Progress ledger update
 - Mark `WP_E_001_selector_normalization_engine` as `Done`.
-- Record implementation commit `4c8fc46`.
+- Record implementation commit `5dedf2d`.
 - Keep `ENV-001` open.
 - Keep `TASK_INDEX.md` unchanged.
 
