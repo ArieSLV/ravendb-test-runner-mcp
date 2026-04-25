@@ -4,6 +4,13 @@ namespace RavenDB.TestRunner.McpServer.TestExecution;
 
 public sealed class TestPreflightEvaluator
 {
+    private readonly BuildToTestHandoffEvaluator handoffEvaluator;
+
+    public TestPreflightEvaluator(BuildToTestHandoffEvaluator? handoffEvaluator = null)
+    {
+        this.handoffEvaluator = handoffEvaluator ?? new BuildToTestHandoffEvaluator();
+    }
+
     public TestPreflightResult Evaluate(TestPreflightRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -31,10 +38,17 @@ public sealed class TestPreflightEvaluator
             buildLinkage,
             request.BuildPolicy,
             request.ExpertMode);
+        BuildToTestHandoff buildHandoff = handoffEvaluator.Evaluate(new(
+            request.WorkspaceId,
+            buildLinkage,
+            request.BuildPolicy,
+            request.ExpertMode,
+            buildResolution,
+            request.LinkedReadinessToken));
 
         IReadOnlyList<PredictedTestSkip> predictedSkips = CreatePredictedSkips(request.Selector, request.Facts);
-        IReadOnlyList<RuntimeUnknown> runtimeUnknowns = CreateRuntimeUnknowns(request, buildResolution);
-        IReadOnlyList<string> warnings = CreateWarnings(request.Selector, buildResolution);
+        IReadOnlyList<RuntimeUnknown> runtimeUnknowns = CreateRuntimeUnknowns(request, buildHandoff);
+        IReadOnlyList<string> warnings = CreateWarnings(request.Selector, buildHandoff);
 
         return new(
             request.WorkspaceId,
@@ -46,6 +60,7 @@ public sealed class TestPreflightEvaluator
             runtimeUnknowns,
             buildLinkage,
             buildResolution,
+            buildHandoff,
             warnings);
     }
 
@@ -77,7 +92,7 @@ public sealed class TestPreflightEvaluator
 
     private static IReadOnlyList<RuntimeUnknown> CreateRuntimeUnknowns(
         TestPreflightRequest request,
-        BuildDependencyResolution buildResolution)
+        BuildToTestHandoff buildHandoff)
     {
         var unknowns = new List<RuntimeUnknown>();
         if (!request.Facts.CatalogAvailable)
@@ -117,14 +132,14 @@ public sealed class TestPreflightEvaluator
                 "Raw expert filters are isolated from structured selector identity and require runtime expansion."));
         }
 
-        if (!buildResolution.AllowsTestExecutionToProceed)
+        if (!buildHandoff.AllowsTestExecutionToProceed)
         {
             unknowns.Add(new(
                 PreflightUnknownKinds.UnresolvedBuildDependency,
-                buildResolution.RequiresBuildSubsystemAction
+                buildHandoff.RequiresBuildSubsystemAction
                     ? BuildPolicyReasonCodes.BuildSubsystemDecisionRequired
-                    : buildResolution.ReasonCodes.FirstOrDefault() ?? PreflightReasonCodes.UnresolvedBuildDependency,
-                buildResolution.Kind));
+                    : buildHandoff.ReasonCodes.FirstOrDefault() ?? PreflightReasonCodes.UnresolvedBuildDependency,
+                buildHandoff.Kind));
         }
 
         return unknowns
@@ -136,7 +151,7 @@ public sealed class TestPreflightEvaluator
 
     private static IReadOnlyList<string> CreateWarnings(
         NormalizedTestSelector selector,
-        BuildDependencyResolution buildResolution)
+        BuildToTestHandoff buildHandoff)
     {
         var warnings = new SortedSet<string>(StringComparer.Ordinal);
         foreach (string warning in selector.Warnings)
@@ -144,7 +159,7 @@ public sealed class TestPreflightEvaluator
             warnings.Add(warning);
         }
 
-        foreach (string warning in buildResolution.Warnings)
+        foreach (string warning in buildHandoff.Warnings)
         {
             warnings.Add(warning);
         }
@@ -168,7 +183,8 @@ public sealed record TestPreflightRequest(
     string? LinkedReadinessTokenId,
     BuildReuseDecision? BuildReuseDecision,
     bool ExpertMode,
-    PreflightRuntimeFacts Facts);
+    PreflightRuntimeFacts Facts,
+    BuildReadinessToken? LinkedReadinessToken = null);
 
 public sealed record TestPreflightResult(
     string WorkspaceId,
@@ -180,6 +196,7 @@ public sealed record TestPreflightResult(
     IReadOnlyList<RuntimeUnknown> RuntimeUnknowns,
     BuildLinkage BuildLinkage,
     BuildDependencyResolution BuildDependencyResolution,
+    BuildToTestHandoff BuildHandoff,
     IReadOnlyList<string> PreflightWarnings);
 
 public sealed record TestExecutionProfileInput(

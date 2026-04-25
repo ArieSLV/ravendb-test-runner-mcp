@@ -65,7 +65,8 @@ public sealed class TestRunPlanner
         }
 
         IReadOnlyList<string> blockers = CreateBlockers(request.PreflightResult);
-        bool canCreateExecutableSteps = request.PreflightResult.BuildDependencyResolution.AllowsTestExecutionToProceed;
+        bool canCreateExecutableSteps = request.PreflightResult.BuildDependencyResolution.AllowsTestExecutionToProceed &&
+            request.PreflightResult.BuildHandoff.AllowsTestExecutionToProceed;
         IReadOnlyList<TestRunPlanStep> steps = canCreateExecutableSteps
             ? CreateSteps(request.Selector)
             : [];
@@ -83,6 +84,7 @@ public sealed class TestRunPlanner
             request.ExecutionProfile,
             request.PreflightResult.BuildLinkage,
             request.PreflightResult.BuildDependencyResolution,
+            request.PreflightResult.BuildHandoff,
             steps,
             request.PreflightResult.PredictedSkips.ToArray(),
             request.PreflightResult.RuntimeUnknowns.ToArray(),
@@ -158,15 +160,24 @@ public sealed class TestRunPlanner
 
     private static IReadOnlyList<string> CreateBlockers(TestPreflightResult preflightResult)
     {
-        if (preflightResult.BuildDependencyResolution.AllowsTestExecutionToProceed)
+        if (preflightResult.BuildDependencyResolution.AllowsTestExecutionToProceed &&
+            preflightResult.BuildHandoff.AllowsTestExecutionToProceed)
         {
             return [];
         }
 
         var blockers = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (string reasonCode in preflightResult.BuildDependencyResolution.ReasonCodes)
+        foreach (string reasonCode in preflightResult.BuildHandoff.ReasonCodes)
         {
             blockers.Add(reasonCode);
+        }
+
+        if (!preflightResult.BuildDependencyResolution.AllowsTestExecutionToProceed)
+        {
+            foreach (string reasonCode in preflightResult.BuildDependencyResolution.ReasonCodes)
+            {
+                blockers.Add(reasonCode);
+            }
         }
 
         foreach (RuntimeUnknown unknown in preflightResult.RuntimeUnknowns)
@@ -187,6 +198,11 @@ public sealed class TestRunPlanner
         NormalizedTestSelector selector)
     {
         var warnings = new SortedSet<string>(preflightResult.PreflightWarnings, StringComparer.Ordinal);
+        foreach (string warning in preflightResult.BuildHandoff.Warnings)
+        {
+            warnings.Add(warning);
+        }
+
         if (selector.ExpertRawFilter is not null)
         {
             warnings.Add(TestRunPlanningReasonCodes.RawExpertFilterIsolated);
@@ -245,6 +261,7 @@ public sealed record TestRunPlan(
     TestExecutionProfileInput ExecutionProfile,
     BuildLinkage BuildLinkage,
     BuildDependencyResolution BuildDependencyResolution,
+    BuildToTestHandoff BuildHandoff,
     IReadOnlyList<TestRunPlanStep> Steps,
     IReadOnlyList<PredictedTestSkip> PredictedSkips,
     IReadOnlyList<RuntimeUnknown> RuntimeUnknowns,

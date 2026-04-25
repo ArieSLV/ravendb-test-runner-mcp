@@ -252,6 +252,7 @@ public sealed class TestRunSchedulerTests
             Assert.Equal(plan.CanonicalSelectorRequestIdentity, snapshot.CanonicalSelectorRequestIdentity);
             Assert.Equal(plan.ExecutionProfile, snapshot.ExecutionProfile);
             Assert.Equal(plan.BuildLinkage, snapshot.BuildLinkage);
+            Assert.Equal(plan.BuildHandoff, snapshot.BuildHandoff);
             Assert.Equal(plan.ArtifactDescriptors, snapshot.ArtifactDescriptors);
         });
     }

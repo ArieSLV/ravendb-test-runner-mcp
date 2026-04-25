@@ -428,6 +428,7 @@ public sealed class TestRunScheduler
             CurrentStepIndex,
             progress,
             request.Plan.BuildLinkage,
+            request.Plan.BuildHandoff,
             resultStatus,
             failureClassification,
             canCancel,
@@ -512,7 +513,8 @@ public sealed class TestRunScheduler
     private static void ValidateRunnablePlan(TestRunPlan plan)
     {
         if (!string.Equals(plan.Status, TestRunPlanStatuses.Planned, StringComparison.Ordinal) ||
-            !plan.BuildDependencyResolution.AllowsTestExecutionToProceed)
+            !plan.BuildDependencyResolution.AllowsTestExecutionToProceed ||
+            !plan.BuildHandoff.AllowsTestExecutionToProceed)
         {
             throw new TestRunSchedulingException(
                 TestRunSchedulingReasonCodes.RunPlanBlocked,
@@ -529,16 +531,26 @@ public sealed class TestRunScheduler
 
     private static void ValidateBuildReference(TestRunPlan plan)
     {
-        string kind = plan.BuildDependencyResolution.Kind;
+        if (!plan.BuildHandoff.Accepted)
+        {
+            throw new TestRunSchedulingException(
+                TestRunSchedulingReasonCodes.MissingAcceptedBuildReference,
+                "Run execution requires an accepted build-to-test handoff.");
+        }
+
+        string kind = plan.BuildHandoff.Kind;
         bool valid = kind switch
         {
-            BuildDependencyResolutionKinds.ReadinessTokenAccepted =>
-                !string.IsNullOrWhiteSpace(plan.BuildLinkage.LinkedReadinessTokenId),
+            BuildToTestHandoffKinds.ReadinessToken =>
+                !string.IsNullOrWhiteSpace(plan.BuildHandoff.LinkedReadinessTokenId) &&
+                string.Equals(plan.BuildHandoff.LinkedReadinessTokenId, plan.BuildLinkage.LinkedReadinessTokenId, StringComparison.Ordinal),
 
-            BuildDependencyResolutionKinds.LinkedBuildAccepted =>
-                !string.IsNullOrWhiteSpace(plan.BuildLinkage.LinkedBuildId),
+            BuildToTestHandoffKinds.LinkedBuild =>
+                !string.IsNullOrWhiteSpace(plan.BuildHandoff.LinkedBuildId) &&
+                string.Equals(plan.BuildHandoff.LinkedBuildId, plan.BuildLinkage.LinkedBuildId, StringComparison.Ordinal),
 
-            BuildDependencyResolutionKinds.ExpertSkipBuildAccepted =>
+            BuildToTestHandoffKinds.ExpertSkipBuild =>
+                string.Equals(plan.BuildHandoff.BuildPolicyMode, BuildPolicyModes.ExpertSkipBuild, StringComparison.Ordinal) &&
                 string.Equals(plan.BuildLinkage.BuildPolicyMode, BuildPolicyModes.ExpertSkipBuild, StringComparison.Ordinal),
 
             _ => false
@@ -672,6 +684,7 @@ public sealed record TestRunStatusSnapshot(
     int CurrentStepIndex,
     decimal Progress,
     BuildLinkage BuildLinkage,
+    BuildToTestHandoff BuildHandoff,
     string? ResultStatus,
     string? FailureClassification,
     bool CanCancel,
