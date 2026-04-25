@@ -10,15 +10,18 @@ public sealed class RavenBuildResultStore
     private readonly IDocumentStore documentStore;
     private readonly RavenArtifactAttachmentStore artifactStore;
     private readonly BuildArtifactCaptureService captureService;
+    private readonly BuildReadinessIntegrationService readinessIntegrationService;
 
     public RavenBuildResultStore(
         IDocumentStore documentStore,
         RavenArtifactAttachmentStoreOptions? artifactOptions = null,
-        BuildArtifactCaptureService? captureService = null)
+        BuildArtifactCaptureService? captureService = null,
+        BuildReadinessIntegrationService? readinessIntegrationService = null)
     {
         this.documentStore = documentStore ?? throw new ArgumentNullException(nameof(documentStore));
         artifactStore = new RavenArtifactAttachmentStore(documentStore, artifactOptions);
         this.captureService = captureService ?? new BuildArtifactCaptureService();
+        this.readinessIntegrationService = readinessIntegrationService ?? new BuildReadinessIntegrationService();
     }
 
     public BuildResultPersistenceResult Save(BuildResultPersistenceRequest request)
@@ -30,8 +33,30 @@ public sealed class RavenBuildResultStore
         BuildDocumentIds.ValidateBuildId(request.ExecutionResult.Execution.BuildId);
         ValidatePersistenceBoundary(request);
 
+        BuildReadinessIntegrationResult? readinessIntegration = null;
+        IReadOnlyList<BuildReadinessTokenPersistenceRequest> readinessWrites = [];
+        BuildExecutionEngineResult executionResult = request.ExecutionResult;
+        if (request.Readiness is not null)
+        {
+            readinessIntegration = readinessIntegrationService.Integrate(new(
+                request.ExecutionResult,
+                request.Readiness.MaterialBuildFingerprint,
+                request.Readiness.ExistingReadinessToken,
+                request.Readiness.ReadinessInvalidation,
+                request.CapturedAtUtc,
+                request.Readiness.ExpiresAtUtc));
+            executionResult = readinessIntegration.ExecutionResult;
+            readinessWrites = CreateReadinessWrites(readinessIntegration, request.CapturedAtUtc);
+
+            using var validationSession = documentStore.OpenSession();
+            foreach (BuildReadinessTokenPersistenceRequest readinessWrite in readinessWrites)
+            {
+                RavenBuildReadinessTokenStore.ValidateCanSave(validationSession, readinessWrite);
+            }
+        }
+
         BuildArtifactCapturePlan capturePlan = captureService.CreatePlan(new(
-            request.ExecutionResult,
+            executionResult,
             request.CommandPlan,
             request.CaptureBinlog,
             request.OutputPaths,
@@ -67,6 +92,11 @@ public sealed class RavenBuildResultStore
             session.Store(resultDocument, buildResultId);
             session.Advanced.GetMetadataFor(resultDocument)["@collection"] = DocumentCollectionNames.BuildResults;
 
+            foreach (BuildReadinessTokenPersistenceRequest readinessWrite in readinessWrites)
+            {
+                RavenBuildReadinessTokenStore.Save(session, readinessWrite);
+            }
+
             session.SaveChanges();
         }
 
@@ -75,7 +105,8 @@ public sealed class RavenBuildResultStore
             buildResultId,
             completedCapture.Execution,
             completedCapture.Result,
-            persistedArtifacts);
+            persistedArtifacts,
+            readinessIntegration);
     }
 
     private static void ValidatePersistenceBoundary(BuildResultPersistenceRequest request)
@@ -99,6 +130,31 @@ public sealed class RavenBuildResultStore
                 BuildResultPersistenceReasonCodes.BuildPlanCommandPlanMismatch +
                 ": BuildCommandPlan.BuildPlanId must match BuildExecution.BuildPlanId before persistence.");
         }
+    }
+
+    private static IReadOnlyList<BuildReadinessTokenPersistenceRequest> CreateReadinessWrites(
+        BuildReadinessIntegrationResult readinessIntegration,
+        DateTime updatedAtUtc)
+    {
+        var writes = new List<BuildReadinessTokenPersistenceRequest>();
+        if (readinessIntegration.UpdatedReadinessToken is not null)
+        {
+            writes.Add(new(
+                readinessIntegration.UpdatedReadinessToken,
+                updatedAtUtc,
+                readinessIntegration.AppliedInvalidation?.ReasonCodes ?? readinessIntegration.Projection.ReasonCodes,
+                AllowStatusTransition: true));
+        }
+
+        if (readinessIntegration.IssuedReadinessToken is not null)
+        {
+            writes.Add(new(
+                readinessIntegration.IssuedReadinessToken,
+                updatedAtUtc,
+                readinessIntegration.Projection.ReasonCodes));
+        }
+
+        return writes;
     }
 
     public BuildExecutionDocument? LoadExecution(string buildId)
@@ -272,11 +328,19 @@ public sealed record BuildResultPersistenceRequest(
     BuildCommandPlan CommandPlan,
     bool CaptureBinlog,
     IReadOnlyList<string> OutputPaths,
-    DateTime CapturedAtUtc);
+    DateTime CapturedAtUtc,
+    BuildResultReadinessPersistenceRequest? Readiness = null);
 
 public sealed record BuildResultPersistenceResult(
     string BuildId,
     string BuildResultId,
     BuildExecution Execution,
     BuildResult Result,
-    IReadOnlyList<ArtifactPersistenceResult> PersistedArtifacts);
+    IReadOnlyList<ArtifactPersistenceResult> PersistedArtifacts,
+    BuildReadinessIntegrationResult? Readiness);
+
+public sealed record BuildResultReadinessPersistenceRequest(
+    BuildFingerprint? MaterialBuildFingerprint,
+    BuildReadinessToken? ExistingReadinessToken,
+    BuildReadinessInvalidation? ReadinessInvalidation,
+    DateTime? ExpiresAtUtc = null);

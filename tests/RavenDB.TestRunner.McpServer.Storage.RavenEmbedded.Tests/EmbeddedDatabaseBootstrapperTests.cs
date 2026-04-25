@@ -45,6 +45,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             AssertRetentionCleanupJournalBaseline(result);
             AssertRetentionCleanupCapUsesArtifactIdOrder(result);
             AssertBuildResultAndArtifactPersistence(result);
+            AssertBuildReadinessPersistence(result);
             AssertSemanticCatalogPersistence(result);
 
             string documentId = "artifact-ref-probes/" + Guid.NewGuid().ToString("N");
@@ -1116,6 +1117,197 @@ public sealed class EmbeddedDatabaseBootstrapperTests
         Assert.Empty(artifactMetadata);
     }
 
+    private static void AssertBuildReadinessPersistence(EmbeddedDatabaseBootstrapResult result)
+    {
+        string suffix = Guid.NewGuid().ToString("N");
+        DateTimeOffset now = new(2026, 4, 25, 14, 0, 0, TimeSpan.Zero);
+        string buildId = "builds/" + suffix + "/2026-04-25/" + Guid.NewGuid().ToString("N");
+        BuildFingerprint fingerprint = CreateBuildFingerprint(suffix);
+        var readinessStore = new RavenBuildReadinessTokenStore(result.Store);
+        BuildReadinessToken token = new BuildReuseEngine().IssueReadyToken(
+            buildId,
+            fingerprint,
+            now.UtcDateTime,
+            now.AddHours(4).UtcDateTime);
+
+        BuildReadinessTokenPersistenceResult created = readinessStore.Save(new(
+            token,
+            now.UtcDateTime,
+            [BuildReadinessIntegrationReasonCodes.MaterialReadinessIssued]));
+        BuildReadinessTokenPersistenceResult idempotent = readinessStore.Save(new(
+            token,
+            now.AddMinutes(1).UtcDateTime,
+            [BuildReadinessIntegrationReasonCodes.MaterialReadinessIssued]));
+
+        Assert.True(created.Created);
+        Assert.False(created.Updated);
+        Assert.False(created.Idempotent);
+        Assert.False(idempotent.Created);
+        Assert.False(idempotent.Updated);
+        Assert.True(idempotent.Idempotent);
+
+        using (var verificationSession = result.Store.OpenSession())
+        {
+            BuildReadinessTokenDocument tokenDocument = verificationSession.Load<BuildReadinessTokenDocument>(token.ReadinessTokenId);
+            Assert.NotNull(tokenDocument);
+            Assert.Equal(DocumentCollectionNames.BuildReadinessTokens, verificationSession.Advanced.GetMetadataFor(tokenDocument)["@collection"]?.ToString());
+            Assert.Equal(token.ReadinessTokenId, tokenDocument.ReadinessTokenId);
+            Assert.Equal(BuildReadinessTokenStatuses.Ready, tokenDocument.Status);
+            Assert.Equal(fingerprint.FingerprintId, tokenDocument.FingerprintId);
+            Assert.Equal(fingerprint.ScopeHash, tokenDocument.ScopeHash);
+            Assert.Equal(fingerprint.Configuration, tokenDocument.Configuration);
+            Assert.Equal([BuildReadinessIntegrationReasonCodes.MaterialReadinessIssued], tokenDocument.ReasonCodes);
+        }
+
+        using (var querySession = result.Store.OpenSession())
+        {
+            var matches = querySession.Advanced
+                .DocumentQuery<BuildReadinessTokenDocument>(indexName: "BuildReadinessTokens/ByFingerprintStatus")
+                .WaitForNonStaleResults(TimeSpan.FromSeconds(30))
+                .WhereEquals("fingerprintId", fingerprint.FingerprintId)
+                .AndAlso()
+                .WhereEquals("status", BuildReadinessTokenStatuses.Ready)
+                .ToList();
+
+            Assert.Single(matches);
+            Assert.Equal(token.ReadinessTokenId, matches[0].ReadinessTokenId);
+        }
+
+        InvalidOperationException drift = Assert.Throws<InvalidOperationException>(() => readinessStore.Save(new(
+            token with
+            {
+                BuildId = "builds/" + suffix + "/2026-04-25/" + Guid.NewGuid().ToString("N")
+            },
+            now.UtcDateTime,
+            [BuildReadinessIntegrationReasonCodes.MaterialReadinessIssued])));
+        Assert.Contains(BuildReadinessTokenPersistenceReasonCodes.PayloadDrift, drift.Message, StringComparison.Ordinal);
+
+        Assert.Throws<ArgumentException>(() => readinessStore.Save(new(
+            token with
+            {
+                ReadinessTokenId = "build-readiness/" + suffix + "/../" + fingerprint.FingerprintId["build-fingerprints/".Length..]
+            },
+            now.UtcDateTime,
+            [])));
+        Assert.Throws<ArgumentException>(() => readinessStore.Save(new(
+            token with
+            {
+                ReadinessTokenId = token.ReadinessTokenId.Replace('/', '\\')
+            },
+            now.UtcDateTime,
+            [])));
+
+        string integratedWorkspaceHash = suffix + "issued";
+        string integratedBuildId = "builds/" + integratedWorkspaceHash + "/2026-04-25/" + Guid.NewGuid().ToString("N");
+        BuildExecutionEngineResult successfulBuild = CreateBuildExecutionEngineResult(
+            integratedBuildId,
+            BuildResultStatuses.Succeeded,
+            BuildExecutionStates.Completed,
+            BuildExecutionPhases.Completed,
+            now,
+            [new(BuildOutputStreams.Stdout, "readiness integration stdout " + suffix, 0, now)]);
+        var buildResultStore = new RavenBuildResultStore(result.Store);
+
+        BuildResultPersistenceResult integrated = buildResultStore.Save(new(
+            successfulBuild,
+            CreateBuildCommandPlan(integratedBuildId, []),
+            CaptureBinlog: false,
+            OutputPaths: ["bin/Release/Readiness.dll"],
+            CapturedAtUtc: now.UtcDateTime,
+            Readiness: new(CreateBuildFingerprint(integratedWorkspaceHash), ExistingReadinessToken: null, ReadinessInvalidation: null)));
+
+        Assert.NotNull(integrated.Readiness);
+        Assert.NotNull(integrated.Readiness.IssuedReadinessToken);
+        Assert.True(integrated.Readiness.Projection.MaterialReadinessIssued);
+        Assert.Equal(integrated.Readiness.IssuedReadinessToken.ReadinessTokenId, integrated.Execution.ReadinessTokenId);
+        Assert.Equal(BuildResultStatuses.Succeeded, integrated.Result.Status);
+
+        using (var integratedSession = result.Store.OpenSession())
+        {
+            BuildExecutionDocument executionDocument = integratedSession.Load<BuildExecutionDocument>(integratedBuildId);
+            Assert.NotNull(executionDocument);
+            Assert.Equal(integrated.Readiness.IssuedReadinessToken.ReadinessTokenId, executionDocument.ReadinessTokenId);
+
+            BuildReadinessTokenDocument issuedDocument =
+                integratedSession.Load<BuildReadinessTokenDocument>(integrated.Readiness.IssuedReadinessToken.ReadinessTokenId);
+            Assert.NotNull(issuedDocument);
+            Assert.Equal(DocumentCollectionNames.BuildReadinessTokens, integratedSession.Advanced.GetMetadataFor(issuedDocument)["@collection"]?.ToString());
+            Assert.Equal(BuildReadinessTokenStatuses.Ready, issuedDocument.Status);
+        }
+
+        string reusedBuildId = "builds/" + suffix + "/2026-04-25/" + Guid.NewGuid().ToString("N");
+        BuildReuseDecision reuseDecision = new(
+            BuildReuseDecisionKinds.ReusedExisting,
+            [BuildReuseReasonCodes.CurrentFingerprintMatches],
+            token.BuildId,
+            NewBuildRequired: false);
+        BuildExecution reusedExecution = new(
+            reusedBuildId,
+            "build-plans/" + reusedBuildId["builds/".Length..],
+            "workspaces/" + suffix,
+            BuildExecutionStates.Completed,
+            BuildExecutionPhases.FinalizingReuse,
+            CurrentStepIndex: 0,
+            now.UtcDateTime,
+            now.AddSeconds(1).UtcDateTime,
+            BuildFingerprintId: null,
+            ReadinessTokenId: null,
+            CanCancel: false);
+        BuildResult reusedResult = new(
+            reusedBuildId,
+            BuildResultStatuses.Reused,
+            FailureClassification: null,
+            OutputsManifest: null,
+            Artifacts: [],
+            ReproCommand: string.Empty,
+            reuseDecision,
+            reuseDecision.ReasonCodes);
+
+        BuildResultPersistenceResult reused = buildResultStore.Save(new(
+            new(reusedExecution, reusedResult, []),
+            CreateBuildCommandPlan(reusedBuildId, []),
+            CaptureBinlog: false,
+            OutputPaths: [],
+            CapturedAtUtc: now.UtcDateTime,
+            Readiness: new(MaterialBuildFingerprint: null, token, ReadinessInvalidation: null)));
+
+        Assert.NotNull(reused.Readiness);
+        Assert.Null(reused.Readiness.IssuedReadinessToken);
+        Assert.True(reused.Readiness.Projection.ExistingReadinessReused);
+        Assert.Empty(reused.PersistedArtifacts);
+        Assert.Equal(token.ReadinessTokenId, reused.Execution.ReadinessTokenId);
+        Assert.Equal(BuildResultStatuses.Reused, reused.Result.Status);
+
+        BuildReadinessInvalidation invalidation = new(
+            token.ReadinessTokenId,
+            BuildReadinessTokenStatuses.Ready,
+            BuildReadinessTokenStatuses.MissingOutputs,
+            [BuildReuseReasonCodes.OutputsMissing]);
+        string failedBuildId = "builds/" + suffix + "/2026-04-25/" + Guid.NewGuid().ToString("N");
+        BuildResultPersistenceResult failed = buildResultStore.Save(new(
+            CreateBuildExecutionEngineResult(
+                failedBuildId,
+                BuildResultStatuses.Failed,
+                BuildExecutionStates.FailedTerminal,
+                BuildExecutionPhases.Completed,
+                now,
+                [new(BuildOutputStreams.Stderr, "readiness invalidation failure " + suffix, 0, now)],
+                BuildExecutionFailureReasonCodes.ProcessExitCodeNonZero),
+            CreateBuildCommandPlan(failedBuildId, []),
+            CaptureBinlog: false,
+            OutputPaths: [],
+            CapturedAtUtc: now.UtcDateTime,
+            Readiness: new(MaterialBuildFingerprint: null, token, invalidation)));
+
+        Assert.NotNull(failed.Readiness);
+        Assert.NotNull(failed.Readiness.UpdatedReadinessToken);
+        Assert.Null(failed.Readiness.IssuedReadinessToken);
+        Assert.Equal(BuildReadinessTokenStatuses.MissingOutputs, failed.Readiness.UpdatedReadinessToken.Status);
+        BuildReadinessTokenDocument invalidatedDocument = readinessStore.Load(token.ReadinessTokenId)!;
+        Assert.Equal(BuildReadinessTokenStatuses.MissingOutputs, invalidatedDocument.Status);
+        Assert.Equal([BuildReuseReasonCodes.OutputsMissing], invalidatedDocument.ReasonCodes);
+    }
+
     private static void AssertSemanticCatalogPersistence(EmbeddedDatabaseBootstrapResult result)
     {
         string suffix = Guid.NewGuid().ToString("N");
@@ -1462,6 +1654,21 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             [],
             "dotnet build RavenDB.sln --configuration Release");
     }
+
+    private static BuildFingerprint CreateBuildFingerprint(string workspaceHash) =>
+        new(
+            "build-fingerprints/" + workspaceHash,
+            "workspaces/" + workspaceHash,
+            "v7.2",
+            "abc123",
+            "clean",
+            "10.0.203",
+            "scope-" + workspaceHash,
+            "Release",
+            "property-" + workspaceHash,
+            "env-" + workspaceHash,
+            "dependency-" + workspaceHash,
+            OutputManifestHash: null);
 
     private static string? ReadCleanupJournalCollectionName(
         EmbeddedDatabaseBootstrapResult result,
