@@ -30,6 +30,16 @@
 - Raw expert filters remain isolated from structured selector identity and are represented only as expert raw-filter markers/reason codes, not expanded into canonical structured identity.
 - Artifact descriptors are logical/canonical only. No files are written, no filesystem spillover behavior is introduced, and no RavenDB persistence was added.
 
+## Corrective passes
+- Review finding fixed: run planning is now bound to the exact selector and execution profile evaluated by preflight.
+- `TestPreflightResult` now carries:
+  - `StructuredSelectorIdentity`;
+  - `CanonicalSelectorRequestIdentity`;
+  - deterministic `ExecutionProfileIdentity`.
+- `TestRunPlanner` rejects selector identity mismatches with `selector_identity_mismatch`, including same-summary selector drift and raw expert-filter marker mismatches.
+- `TestRunPlanner` rejects execution profile mismatches with `execution_profile_mismatch`.
+- Execution profile option comparison uses deterministic ordinal key/value identity, so equivalent option dictionaries in different enumeration order are accepted.
+
 ## Touched contracts
 - Aligned with `DOMAIN_MODEL.md`:
   - `RunPlan`, `SelectionSummary`, `BuildLinkage`, `steps`, and `predictedSkips` are represented as implementation-facing domain contracts.
@@ -51,8 +61,8 @@
   `dotnet build .\RavenDB.TestRunner.McpServer.sln -m:1 -v minimal`
 - Result: 0 warnings, 0 errors.
 - TestExecution tests passed:
-  `dotnet test .\tests\RavenDB.TestRunner.McpServer.TestExecution.Tests\RavenDB.TestRunner.McpServer.TestExecution.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-e-003-run-planner.trx"`
-- Result: 31 tests discovered, executed, and passed.
+  `dotnet test .\tests\RavenDB.TestRunner.McpServer.TestExecution.Tests\RavenDB.TestRunner.McpServer.TestExecution.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-e-003-identity-corrective.trx"`
+- Result: 35 tests discovered, executed, and passed.
 - Existing Build tests passed:
   `dotnet test .\tests\RavenDB.TestRunner.McpServer.Build.Tests\RavenDB.TestRunner.McpServer.Build.Tests.csproj --no-build --results-directory .\.tmp-review-results --logger "trx;LogFileName=wp-e-003-build-boundary.trx"`
 - Result: 70 tests discovered, executed, and passed.
@@ -62,7 +72,7 @@
 
 ## Progress ledger update
 - Mark `WP_E_003_test_run_planner` as `Done`.
-- Record implementation commit `2fe841d`.
+- Record corrective implementation commit `fecf1a0`.
 - Keep `ENV-001` open.
 - Keep `TASK_INDEX.md` unchanged.
 
