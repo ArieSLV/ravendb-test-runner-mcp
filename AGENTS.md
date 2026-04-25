@@ -20,3 +20,18 @@ directories after validation unless a task explicitly asks to keep them.
 
 Keep `ENV-001` open until the project implements deterministic build environment
 sanitization. Do not mutate global or user-level environment variables to work around it.
+
+## Implementation Review Workflow
+
+When reviewing a completed implementation-agent iteration for this project, always
+finish the review with an actionable prompt for the implementation session.
+
+- If findings exist at any severity, provide a prompt-engineered fix directive for
+  the implementation session immediately after the findings.
+- If findings are empty, provide a prompt-engineered directive for the next
+  implementation step immediately after the accepted review summary.
+- Design each next-step prompt from the current repository state and task ledger at
+  review time. Do not blindly reuse old wave plans.
+- Explicitly decide whether the next step should use one integrating agent or a
+  parallel worker wave. If using workers, define non-overlapping write sets and use
+  `model=gpt-5.5` with `reasoning_effort=xhigh`.
