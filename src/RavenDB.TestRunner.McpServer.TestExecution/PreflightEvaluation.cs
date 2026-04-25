@@ -39,6 +39,9 @@ public sealed class TestPreflightEvaluator
         return new(
             request.WorkspaceId,
             request.Selector.Summary,
+            request.Selector.StructuredIdentity,
+            request.Selector.CanonicalRequestIdentity,
+            TestExecutionProfileIdentities.Create(request.ExecutionProfile),
             predictedSkips,
             runtimeUnknowns,
             buildLinkage,
@@ -170,6 +173,9 @@ public sealed record TestPreflightRequest(
 public sealed record TestPreflightResult(
     string WorkspaceId,
     SelectorSummary SelectionSummary,
+    string StructuredSelectorIdentity,
+    string CanonicalSelectorRequestIdentity,
+    string ExecutionProfileIdentity,
     IReadOnlyList<PredictedTestSkip> PredictedSkips,
     IReadOnlyList<RuntimeUnknown> RuntimeUnknowns,
     BuildLinkage BuildLinkage,
@@ -179,6 +185,30 @@ public sealed record TestPreflightResult(
 public sealed record TestExecutionProfileInput(
     string ProfileId,
     IReadOnlyDictionary<string, string> Options);
+
+public static class TestExecutionProfileIdentities
+{
+    public static string Create(TestExecutionProfileInput profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentException.ThrowIfNullOrWhiteSpace(profile.ProfileId);
+        ArgumentNullException.ThrowIfNull(profile.Options);
+
+        string options = string.Join(
+            ',',
+            profile.Options
+                .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                .Select(pair => RenderSegment(pair.Key) + "=" + RenderSegment(pair.Value)));
+
+        return "profile=" + RenderSegment(profile.ProfileId) + "|options=" + options;
+    }
+
+    private static string RenderSegment(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return value.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + value;
+    }
+}
 
 public sealed record PreflightRuntimeFacts(
     bool CatalogAvailable,

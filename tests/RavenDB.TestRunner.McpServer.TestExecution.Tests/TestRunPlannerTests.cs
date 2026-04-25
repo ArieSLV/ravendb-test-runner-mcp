@@ -119,6 +119,98 @@ public sealed class TestRunPlannerTests
     }
 
     [Fact]
+    public void PlanningRejectsDifferentSelectorWithSameSummary()
+    {
+        NormalizedTestSelector preflightSelector = selectorEngine.Normalize(new(Categories: ["Smoke"]));
+        NormalizedTestSelector planningSelector = selectorEngine.Normalize(new(Categories: ["AI"]));
+        TestPreflightResult preflight = CreatePreflight(
+            preflightSelector,
+            CreatePolicy(BuildPolicyModes.RequireExistingReadyBuild),
+            linkedReadinessTokenId: "build-readiness/ws/fingerprint");
+
+        Assert.Equal(preflightSelector.Summary, planningSelector.Summary);
+
+        TestRunPlanningException exception = Assert.Throws<TestRunPlanningException>(() =>
+            planner.Create(CreatePlanningRequest(planningSelector, preflight)));
+
+        Assert.Equal(TestRunPlanningReasonCodes.SelectorIdentityMismatch, exception.ReasonCode);
+    }
+
+    [Fact]
+    public void PlanningRejectsRawExpertMarkerIdentityMismatchWithoutLeakingRawValue()
+    {
+        const string rawFilter = "FullyQualifiedName~CanRun";
+        NormalizedTestSelector preflightSelector = selectorEngine.Normalize(new(
+            Categories: ["Smoke"],
+            RawFilter: rawFilter,
+            ExpertMode: true));
+        NormalizedTestSelector planningSelector = selectorEngine.Normalize(new(Categories: ["Smoke"]));
+        TestPreflightResult preflight = CreatePreflight(
+            preflightSelector,
+            CreatePolicy(BuildPolicyModes.RequireExistingReadyBuild),
+            linkedReadinessTokenId: "build-readiness/ws/fingerprint",
+            expertMode: true);
+
+        TestRunPlanningException exception = Assert.Throws<TestRunPlanningException>(() =>
+            planner.Create(CreatePlanningRequest(planningSelector, preflight)));
+
+        Assert.Equal(TestRunPlanningReasonCodes.SelectorIdentityMismatch, exception.ReasonCode);
+        Assert.DoesNotContain(rawFilter, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PlanningRejectsExecutionProfileMismatch()
+    {
+        NormalizedTestSelector selector = selectorEngine.Normalize(new(Categories: ["Smoke"]));
+        TestPreflightResult preflight = CreatePreflight(
+            selector,
+            CreatePolicy(BuildPolicyModes.RequireExistingReadyBuild),
+            linkedReadinessTokenId: "build-readiness/ws/fingerprint",
+            executionProfile: new("ci", new Dictionary<string, string>(StringComparer.Ordinal)));
+
+        TestRunPlanningException exception = Assert.Throws<TestRunPlanningException>(() =>
+            planner.Create(CreatePlanningRequest(
+                selector,
+                preflight,
+                executionProfile: new("gpu", new Dictionary<string, string>(StringComparer.Ordinal)))));
+
+        Assert.Equal(TestRunPlanningReasonCodes.ExecutionProfileMismatch, exception.ReasonCode);
+    }
+
+    [Fact]
+    public void PlanningAcceptsExecutionProfileOptionsInDifferentDictionaryOrder()
+    {
+        NormalizedTestSelector selector = selectorEngine.Normalize(new(Categories: ["Smoke"]));
+        TestExecutionProfileInput preflightProfile = new(
+            "ci",
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["parallel"] = "4",
+                ["timeout"] = "00:05:00"
+            });
+        TestExecutionProfileInput planningProfile = new(
+            "ci",
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["timeout"] = "00:05:00",
+                ["parallel"] = "4"
+            });
+        TestPreflightResult preflight = CreatePreflight(
+            selector,
+            CreatePolicy(BuildPolicyModes.RequireExistingReadyBuild),
+            linkedReadinessTokenId: "build-readiness/ws/fingerprint",
+            executionProfile: preflightProfile);
+
+        TestRunPlan plan = planner.Create(CreatePlanningRequest(
+            selector,
+            preflight,
+            executionProfile: planningProfile));
+
+        Assert.Equal(TestRunPlanStatuses.Planned, plan.Status);
+        Assert.Equal(TestExecutionProfileIdentities.Create(preflightProfile), TestExecutionProfileIdentities.Create(planningProfile));
+    }
+
+    [Fact]
     public void StepsAndArtifactDescriptors_AreDeterministicAcrossSelectorInputOrdering()
     {
         NormalizedTestSelector firstSelector = selectorEngine.Normalize(new(
@@ -206,11 +298,12 @@ public sealed class TestRunPlannerTests
         string? linkedReadinessTokenId = null,
         string? linkedBuildId = null,
         bool expertMode = false,
-        PreflightRuntimeFacts? facts = null) =>
+        PreflightRuntimeFacts? facts = null,
+        TestExecutionProfileInput? executionProfile = null) =>
         preflightEvaluator.Evaluate(new(
             "workspaces/ws",
             selector,
-            new("ci", new Dictionary<string, string>(StringComparer.Ordinal)),
+            executionProfile ?? new("ci", new Dictionary<string, string>(StringComparer.Ordinal)),
             buildPolicy,
             linkedBuildId,
             LinkedBuildPlanId: null,
@@ -223,14 +316,15 @@ public sealed class TestRunPlannerTests
         NormalizedTestSelector selector,
         TestPreflightResult preflight,
         string runPlanId = "run-plans/ws/2026-04-25/0001",
-        DateTime? createdAtUtc = null) =>
+        DateTime? createdAtUtc = null,
+        TestExecutionProfileInput? executionProfile = null) =>
         new(
             runPlanId,
             "workspaces/ws",
             createdAtUtc ?? PlanCreatedAtUtc,
             selector,
             preflight,
-            new("ci", new Dictionary<string, string>(StringComparer.Ordinal)),
+            executionProfile ?? new("ci", new Dictionary<string, string>(StringComparer.Ordinal)),
             "artifacts/runs");
 
     private static PreflightRuntimeFacts CreateFacts() =>

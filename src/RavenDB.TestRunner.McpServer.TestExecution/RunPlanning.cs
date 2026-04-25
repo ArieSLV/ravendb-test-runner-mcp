@@ -33,11 +33,35 @@ public sealed class TestRunPlanner
                 "Run planning request workspace must match the preflight result workspace.");
         }
 
+        if (!string.Equals(
+                request.PreflightResult.StructuredSelectorIdentity,
+                request.Selector.StructuredIdentity,
+                StringComparison.Ordinal) ||
+            !string.Equals(
+                request.PreflightResult.CanonicalSelectorRequestIdentity,
+                request.Selector.CanonicalRequestIdentity,
+                StringComparison.Ordinal))
+        {
+            throw new TestRunPlanningException(
+                TestRunPlanningReasonCodes.SelectorIdentityMismatch,
+                "Run planning selector identity must match the preflight selector identity.");
+        }
+
         if (!Equals(request.PreflightResult.SelectionSummary, request.Selector.Summary))
         {
             throw new TestRunPlanningException(
                 TestRunPlanningReasonCodes.SelectionSummaryMismatch,
                 "Run planning selector summary must match the preflight result summary.");
+        }
+
+        if (!string.Equals(
+                request.PreflightResult.ExecutionProfileIdentity,
+                TestExecutionProfileIdentities.Create(request.ExecutionProfile),
+                StringComparison.Ordinal))
+        {
+            throw new TestRunPlanningException(
+                TestRunPlanningReasonCodes.ExecutionProfileMismatch,
+                "Run planning execution profile must match the preflight execution profile.");
         }
 
         IReadOnlyList<string> blockers = CreateBlockers(request.PreflightResult);
@@ -293,8 +317,10 @@ public static class TestRunPlanningReasonCodes
     public const string BuildDependencyUnresolved = "build_dependency_unresolved";
     public const string CreatedAtMustBeUtc = "created_at_must_be_utc";
     public const string DeterministicSkipPreserved = "deterministic_skip_preserved";
+    public const string ExecutionProfileMismatch = "execution_profile_mismatch";
     public const string InvalidLogicalPath = "invalid_logical_path";
     public const string RawExpertFilterIsolated = "raw_expert_filter_isolated";
+    public const string SelectorIdentityMismatch = "selector_identity_mismatch";
     public const string SelectionSummaryMismatch = "selection_summary_mismatch";
     public const string WorkspaceMismatch = "workspace_mismatch";
 }
