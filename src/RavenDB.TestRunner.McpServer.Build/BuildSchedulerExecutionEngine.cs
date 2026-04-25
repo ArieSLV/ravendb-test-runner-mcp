@@ -24,6 +24,11 @@ public sealed class BuildCommandPlanner
 
         if (request.Plan.ReuseDecision?.NewBuildRequired is false)
         {
+            if (!BuildReuseDecisionGuards.IsAcceptedNoMaterialBuildDecision(request.Plan.ReuseDecision))
+            {
+                throw new InvalidOperationException(BuildReuseDecisionGuards.CreateRejectedNoMaterialBuildMessage(request.Plan.ReuseDecision!));
+            }
+
             return new(
                 request.Plan.BuildPlanId,
                 request.Graph.WorkspaceRootPath,
@@ -278,6 +283,24 @@ public sealed class BuildCommandPlanner
     }
 }
 
+internal static class BuildReuseDecisionGuards
+{
+    public static bool IsAcceptedNoMaterialBuildDecision(BuildReuseDecision? reuseDecision) =>
+        reuseDecision is not null &&
+        !reuseDecision.NewBuildRequired &&
+        reuseDecision.Decision is BuildReuseDecisionKinds.ReusedExisting or BuildReuseDecisionKinds.SkippedByPolicy;
+
+    public static string CreateRejectedNoMaterialBuildMessage(BuildReuseDecision reuseDecision)
+    {
+        string reasonCode = reuseDecision.Decision == BuildReuseDecisionKinds.RejectedExisting
+            ? reuseDecision.ReasonCodes.FirstOrDefault(code => !string.IsNullOrWhiteSpace(code)) ??
+                BuildPolicyReasonCodes.BuildSubsystemDecisionRequired
+            : BuildPolicyReasonCodes.BuildSubsystemDecisionRequired;
+
+        return reasonCode + ": invalid_no_material_build_reuse_decision";
+    }
+}
+
 public sealed class BuildChildProcessEnvironmentBuilder
 {
     public static IReadOnlyList<string> DefaultInheritedVariables { get; } =
@@ -394,7 +417,7 @@ public sealed class BuildExecutionEngine
 
         DateTime startedAtUtc = NormalizeUtc(request.StartedAtUtc);
         if (request.CommandPlan.Steps.Count == 0 &&
-            IsAcceptedNoMaterialBuildDecision(request.Plan.ReuseDecision))
+            BuildReuseDecisionGuards.IsAcceptedNoMaterialBuildDecision(request.Plan.ReuseDecision))
         {
             BuildReuseDecision reuseDecision = request.Plan.ReuseDecision!;
             BuildExecution reusedExecution = CreateExecution(
@@ -491,14 +514,14 @@ public sealed class BuildExecutionEngine
 
         if (!hasCommandSteps)
         {
-            if (IsAcceptedNoMaterialBuildDecision(reuseDecision))
+            if (BuildReuseDecisionGuards.IsAcceptedNoMaterialBuildDecision(reuseDecision))
             {
                 return;
             }
 
             if (reuseDecision?.Decision == BuildReuseDecisionKinds.RejectedExisting)
             {
-                throw new InvalidOperationException(CreateRejectedExistingMessage(reuseDecision));
+                throw new InvalidOperationException(BuildReuseDecisionGuards.CreateRejectedNoMaterialBuildMessage(reuseDecision));
             }
 
             throw new InvalidOperationException(
@@ -514,24 +537,12 @@ public sealed class BuildExecutionEngine
         {
             if (reuseDecision.Decision == BuildReuseDecisionKinds.RejectedExisting)
             {
-                throw new InvalidOperationException(CreateRejectedExistingMessage(reuseDecision));
+                throw new InvalidOperationException(BuildReuseDecisionGuards.CreateRejectedNoMaterialBuildMessage(reuseDecision));
             }
 
             throw new InvalidOperationException(
                 BuildPolicyReasonCodes.BuildSubsystemDecisionRequired + ": command_steps_conflict_with_no_material_build_decision");
         }
-    }
-
-    private static bool IsAcceptedNoMaterialBuildDecision(BuildReuseDecision? reuseDecision) =>
-        reuseDecision is not null &&
-        !reuseDecision.NewBuildRequired &&
-        reuseDecision.Decision is BuildReuseDecisionKinds.ReusedExisting or BuildReuseDecisionKinds.SkippedByPolicy;
-
-    private static string CreateRejectedExistingMessage(BuildReuseDecision reuseDecision)
-    {
-        string reasonCode = reuseDecision.ReasonCodes.FirstOrDefault(code => !string.IsNullOrWhiteSpace(code)) ??
-            BuildPolicyReasonCodes.BuildSubsystemDecisionRequired;
-        return reasonCode + ": rejected_existing_build_reuse_decision_cannot_be_executed";
     }
 
     private static BuildExecution CreateExecution(

@@ -45,6 +45,73 @@ public sealed class BuildSchedulerExecutionEngineTests
     }
 
     [Fact]
+    public void CommandPlanner_CreatesEmptyPlanForReusedExistingNoMaterialDecision()
+    {
+        BuildReuseDecision reuseDecision = new(
+            BuildReuseDecisionKinds.ReusedExisting,
+            [BuildReuseReasonCodes.CurrentFingerprintMatches],
+            "builds/ws-1/2026-04-24/existing",
+            NewBuildRequired: false);
+        BuildPlan plan = CreatePlan(CreatePolicy(BuildPolicyModes.BuildIfMissingOrStale), reuseDecision);
+
+        BuildCommandPlan commandPlan = new BuildCommandPlanner().Create(CreateCommandPlanRequest(plan));
+
+        Assert.Empty(commandPlan.Steps);
+        Assert.Empty(commandPlan.ReproCommand);
+        Assert.Contains(commandPlan.ExpectedArtifacts, artifact => artifact.ArtifactKind == ArtifactKindCatalog.BuildCommand);
+    }
+
+    [Fact]
+    public void CommandPlanner_CreatesEmptyPlanForSkippedByPolicyNoMaterialDecision()
+    {
+        BuildReuseDecision reuseDecision = new(
+            BuildReuseDecisionKinds.SkippedByPolicy,
+            [BuildReuseReasonCodes.ExpertSkipBuild, BuildPolicyReasonCodes.ExpertSkipBuildAccepted],
+            ExistingBuildId: null,
+            NewBuildRequired: false);
+        BuildPlan plan = CreatePlan(CreatePolicy(BuildPolicyModes.ExpertSkipBuild), reuseDecision);
+
+        BuildCommandPlan commandPlan = new BuildCommandPlanner().Create(CreateCommandPlanRequest(plan));
+
+        Assert.Empty(commandPlan.Steps);
+        Assert.Empty(commandPlan.ReproCommand);
+    }
+
+    [Fact]
+    public void CommandPlanner_RejectsRejectedExistingNoMaterialDecisionBeforeCreatingPlan()
+    {
+        BuildReuseDecision reuseDecision = new(
+            BuildReuseDecisionKinds.RejectedExisting,
+            [BuildPolicyReasonCodes.ExistingReadinessRequired, BuildReuseReasonCodes.NoExistingReadiness],
+            ExistingBuildId: null,
+            NewBuildRequired: false);
+        BuildPlan plan = CreatePlan(CreatePolicy(BuildPolicyModes.RequireExistingReadyBuild), reuseDecision);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+            new BuildCommandPlanner().Create(CreateCommandPlanRequest(plan)));
+
+        Assert.Contains(BuildPolicyReasonCodes.ExistingReadinessRequired, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("invalid_no_material_build_reuse_decision", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CommandPlanner_RejectsUnsupportedNoMaterialDecisionKind()
+    {
+        BuildReuseDecision reuseDecision = new(
+            "unexpected_no_build_decision",
+            ["caller_supplied_reason"],
+            ExistingBuildId: null,
+            NewBuildRequired: false);
+        BuildPlan plan = CreatePlan(CreatePolicy(BuildPolicyModes.BuildIfMissingOrStale), reuseDecision);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+            new BuildCommandPlanner().Create(CreateCommandPlanRequest(plan)));
+
+        Assert.Contains(BuildPolicyReasonCodes.BuildSubsystemDecisionRequired, exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("caller_supplied_reason", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void EnvironmentBuilder_RemovesAmbientMsbuildSdksPathUnlessExplicitlyOverridden()
     {
         var environment = new BuildChildProcessEnvironmentBuilder().Create(new(
@@ -367,6 +434,15 @@ public sealed class BuildSchedulerExecutionEngineTests
             [],
             "dotnet build RavenDB.sln --configuration Release --no-restore");
     }
+
+    private static BuildCommandPlanRequest CreateCommandPlanRequest(BuildPlan plan) =>
+        new(
+            plan,
+            CreateGraph(),
+            CreateEnvironment(),
+            DotNetExecutablePath: "dotnet",
+            StepTimeout: TimeSpan.FromMinutes(5),
+            BinlogDirectory: ".rtrms/binlogs");
 
     private static BuildCommandPlan CreateEmptyCommandPlan(BuildPlan plan) =>
         new(
