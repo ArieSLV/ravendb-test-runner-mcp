@@ -91,6 +91,7 @@ public sealed class BuildReadinessIntegrationTests
             BuildResultStatuses.Reused,
             BuildExecutionStates.Completed,
             BuildExecutionPhases.FinalizingReuse,
+            buildFingerprintId: fingerprint.FingerprintId,
             reuseDecision: reuseDecision);
 
         BuildReadinessIntegrationResult result = new BuildReadinessIntegrationService().Integrate(new(
@@ -108,6 +109,34 @@ public sealed class BuildReadinessIntegrationTests
         Assert.Equal(existingToken.ReadinessTokenId, result.ExecutionResult.Execution.ReadinessTokenId);
         Assert.Equal(reuseDecision, result.ExecutionResult.Result.ReuseDecision);
         Assert.Contains(BuildReadinessIntegrationReasonCodes.ExistingReadinessReused, result.Projection.ReasonCodes);
+    }
+
+    [Fact]
+    public void AcceptedReuse_RejectsMissingExecutionFingerprint()
+    {
+        BuildFingerprint fingerprint = CreateFingerprint();
+        BuildReadinessToken existingToken = new BuildReuseEngine().IssueReadyToken(
+            "builds/ws-1/2026-04-25/existing",
+            fingerprint,
+            Now.AddHours(-1).UtcDateTime);
+        BuildReuseDecision reuseDecision = new(
+            BuildReuseDecisionKinds.ReusedExisting,
+            [BuildReuseReasonCodes.CurrentFingerprintMatches],
+            existingToken.BuildId,
+            NewBuildRequired: false);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => new BuildReadinessIntegrationService().Integrate(new(
+            CreateEngineResult(
+                BuildResultStatuses.Reused,
+                BuildExecutionStates.Completed,
+                BuildExecutionPhases.FinalizingReuse,
+                reuseDecision: reuseDecision),
+            MaterialBuildFingerprint: null,
+            existingToken,
+            ReadinessInvalidation: null,
+            Now.UtcDateTime)));
+
+        Assert.Contains(BuildReadinessIntegrationReasonCodes.ExistingReadinessFingerprintRequired, exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -157,6 +186,7 @@ public sealed class BuildReadinessIntegrationTests
                 BuildResultStatuses.Reused,
                 BuildExecutionStates.Completed,
                 BuildExecutionPhases.FinalizingReuse,
+                buildFingerprintId: otherWorkspaceFingerprint.FingerprintId,
                 reuseDecision: reuseDecision),
             MaterialBuildFingerprint: null,
             otherWorkspaceToken,

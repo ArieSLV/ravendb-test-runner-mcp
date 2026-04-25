@@ -1235,6 +1235,43 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             Assert.Equal(BuildReadinessTokenStatuses.Ready, issuedDocument.Status);
         }
 
+        string rejectedBlankFingerprintBuildId = "builds/" + suffix + "/2026-04-25/" + Guid.NewGuid().ToString("N");
+        BuildReuseDecision rejectedBlankFingerprintDecision = new(
+            BuildReuseDecisionKinds.ReusedExisting,
+            [BuildReuseReasonCodes.CurrentFingerprintMatches],
+            token.BuildId,
+            NewBuildRequired: false);
+        BuildExecution rejectedBlankFingerprintExecution = new(
+            rejectedBlankFingerprintBuildId,
+            "build-plans/" + rejectedBlankFingerprintBuildId["builds/".Length..],
+            "workspaces/" + suffix,
+            BuildExecutionStates.Completed,
+            BuildExecutionPhases.FinalizingReuse,
+            CurrentStepIndex: 0,
+            now.UtcDateTime,
+            now.AddSeconds(1).UtcDateTime,
+            BuildFingerprintId: null,
+            ReadinessTokenId: null,
+            CanCancel: false);
+        BuildResult rejectedBlankFingerprintResult = new(
+            rejectedBlankFingerprintBuildId,
+            BuildResultStatuses.Reused,
+            FailureClassification: null,
+            OutputsManifest: null,
+            Artifacts: [],
+            ReproCommand: string.Empty,
+            rejectedBlankFingerprintDecision,
+            rejectedBlankFingerprintDecision.ReasonCodes);
+        InvalidOperationException blankFingerprintException = Assert.Throws<InvalidOperationException>(() => buildResultStore.Save(new(
+            new(rejectedBlankFingerprintExecution, rejectedBlankFingerprintResult, []),
+            CreateBuildCommandPlan(rejectedBlankFingerprintBuildId, []),
+            CaptureBinlog: false,
+            OutputPaths: [],
+            CapturedAtUtc: now.UtcDateTime,
+            Readiness: new(MaterialBuildFingerprint: null, token, ReadinessInvalidation: null))));
+        Assert.Contains(BuildReadinessIntegrationReasonCodes.ExistingReadinessFingerprintRequired, blankFingerprintException.Message, StringComparison.Ordinal);
+        AssertNoBuildResultPersistence(result, rejectedBlankFingerprintBuildId);
+
         string reusedBuildId = "builds/" + suffix + "/2026-04-25/" + Guid.NewGuid().ToString("N");
         BuildReuseDecision reuseDecision = new(
             BuildReuseDecisionKinds.ReusedExisting,
@@ -1250,7 +1287,7 @@ public sealed class EmbeddedDatabaseBootstrapperTests
             CurrentStepIndex: 0,
             now.UtcDateTime,
             now.AddSeconds(1).UtcDateTime,
-            BuildFingerprintId: null,
+            BuildFingerprintId: token.FingerprintId,
             ReadinessTokenId: null,
             CanCancel: false);
         BuildResult reusedResult = new(

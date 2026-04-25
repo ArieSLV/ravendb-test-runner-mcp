@@ -248,8 +248,14 @@ public sealed class BuildReadinessIntegrationService
                 ": reused build readiness token workspace must match the build execution workspace.");
         }
 
-        if (!string.IsNullOrWhiteSpace(execution.BuildFingerprintId) &&
-            !string.Equals(execution.BuildFingerprintId, token.FingerprintId, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(execution.BuildFingerprintId))
+        {
+            throw new InvalidOperationException(
+                BuildReadinessIntegrationReasonCodes.ExistingReadinessFingerprintRequired +
+                ": reused build execution must carry the current fingerprint before linking an existing readiness token.");
+        }
+
+        if (!string.Equals(execution.BuildFingerprintId, token.FingerprintId, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 BuildReadinessIntegrationReasonCodes.ExistingReadinessFingerprintMismatch +
@@ -294,6 +300,7 @@ public static class BuildReadinessIntegrationReasonCodes
     public const string BuildResultExecutionMismatch = "build_readiness_result_execution_mismatch";
     public const string ExistingReadinessBuildRequired = "existing_readiness_build_required";
     public const string ExistingReadinessBuildMismatch = "existing_readiness_build_mismatch";
+    public const string ExistingReadinessFingerprintRequired = "existing_readiness_fingerprint_required";
     public const string ExistingReadinessFingerprintMismatch = "existing_readiness_fingerprint_mismatch";
     public const string ExistingReadinessNotReady = "existing_readiness_not_ready";
     public const string ExistingReadinessReused = "existing_readiness_reused";
