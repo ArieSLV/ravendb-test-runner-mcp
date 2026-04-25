@@ -60,6 +60,35 @@ public sealed class BuildToTestHandoffTests
     }
 
     [Fact]
+    public void LinkedBuildHandoff_AcceptsMatchingReuseExistingBuildProvenance()
+    {
+        const string linkedBuildId = "builds/ws/2026-04-25/linked";
+        NormalizedTestSelector selector = selectorEngine.Normalize(new(Categories: ["Smoke"]));
+        BuildReuseDecision reuseDecision = new(
+            BuildReuseDecisionKinds.ReusedExisting,
+            [BuildReuseReasonCodes.CurrentFingerprintMatches],
+            ExistingBuildId: linkedBuildId,
+            NewBuildRequired: false);
+
+        TestPreflightResult preflight = CreatePreflight(
+            selector,
+            CreatePolicy(BuildPolicyModes.RequireExistingReadyBuild),
+            linkedBuildId: linkedBuildId,
+            buildReuseDecision: reuseDecision);
+        TestRunPlan plan = planner.Create(CreatePlanningRequest(selector, preflight));
+
+        Assert.Equal(BuildToTestHandoffKinds.LinkedBuild, preflight.BuildHandoff.Kind);
+        Assert.Equal(BuildToTestHandoffStatuses.Accepted, preflight.BuildHandoff.Status);
+        Assert.True(preflight.BuildHandoff.AllowsTestExecutionToProceed);
+        Assert.Equal(linkedBuildId, preflight.BuildHandoff.LinkedBuildId);
+        Assert.Equal(linkedBuildId, preflight.BuildHandoff.BuildReuseDecision?.ExistingBuildId);
+        Assert.Contains(BuildToTestHandoffReasonCodes.LinkedBuildHandoffAccepted, plan.BuildHandoff.ReasonCodes);
+        Assert.Equal(TestRunPlanStatuses.Planned, plan.Status);
+        Assert.NotEmpty(plan.Steps);
+        Assert.NotEmpty(plan.ArtifactDescriptors);
+    }
+
+    [Fact]
     public void ExpertSkipHandoff_IsAcceptedOnlyWithExpertModeProof()
     {
         NormalizedTestSelector selector = selectorEngine.Normalize(new(Categories: ["Smoke"]));
@@ -205,6 +234,40 @@ public sealed class BuildToTestHandoffTests
         Assert.Empty(plan.Steps);
         Assert.Empty(plan.ArtifactDescriptors);
         Assert.Contains(BuildToTestHandoffReasonCodes.LinkedBuildMismatch, plan.BlockerReasonCodes);
+        Assert.Equal(TestRunSchedulingReasonCodes.RunPlanBlocked, exception.ReasonCode);
+        Assert.Equal(0, runner.InvocationCount);
+    }
+
+    [Fact]
+    public void LinkedBuildHandoff_RejectsConflictingReuseExistingBuildProvenance()
+    {
+        const string linkedBuildId = "builds/ws/2026-04-25/linked";
+        NormalizedTestSelector selector = selectorEngine.Normalize(new(Categories: ["Smoke"]));
+        BuildReuseDecision reuseDecision = new(
+            BuildReuseDecisionKinds.ReusedExisting,
+            [BuildReuseReasonCodes.CurrentFingerprintMatches],
+            ExistingBuildId: "builds/ws/2026-04-25/conflicting",
+            NewBuildRequired: false);
+
+        TestPreflightResult preflight = CreatePreflight(
+            selector,
+            CreatePolicy(BuildPolicyModes.RequireExistingReadyBuild),
+            linkedBuildId: linkedBuildId,
+            buildReuseDecision: reuseDecision);
+        TestRunPlan plan = planner.Create(CreatePlanningRequest(selector, preflight));
+        var runner = new FakeRunProcessRunner(TestRunProcessOutcomes.Succeeded, exitCode: 0);
+
+        TestRunSchedulingException exception = Assert.Throws<TestRunSchedulingException>(() =>
+            new TestRunScheduler(runner).Schedule(CreateScheduleRequest(plan)));
+
+        Assert.Equal(BuildToTestHandoffKinds.LinkedBuild, preflight.BuildHandoff.Kind);
+        Assert.Equal(BuildToTestHandoffStatuses.Rejected, preflight.BuildHandoff.Status);
+        Assert.False(preflight.BuildHandoff.AllowsTestExecutionToProceed);
+        Assert.Contains(BuildToTestHandoffReasonCodes.BuildReuseExistingBuildMismatch, preflight.BuildHandoff.ReasonCodes);
+        Assert.Equal(TestRunPlanStatuses.Blocked, plan.Status);
+        Assert.Empty(plan.Steps);
+        Assert.Empty(plan.ArtifactDescriptors);
+        Assert.Contains(BuildToTestHandoffReasonCodes.BuildReuseExistingBuildMismatch, plan.BlockerReasonCodes);
         Assert.Equal(TestRunSchedulingReasonCodes.RunPlanBlocked, exception.ReasonCode);
         Assert.Equal(0, runner.InvocationCount);
     }

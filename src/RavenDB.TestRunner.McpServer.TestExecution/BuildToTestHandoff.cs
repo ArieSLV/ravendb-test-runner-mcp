@@ -27,6 +27,12 @@ public sealed class BuildToTestHandoffEvaluator
                 [BuildToTestHandoffReasonCodes.BuildReuseRejected, .. request.BuildLinkage.BuildReuseDecision.ReasonCodes]);
         }
 
+        BuildToTestHandoff? provenanceRejection = EvaluateLinkedBuildReuseProvenance(request, resolution);
+        if (provenanceRejection is not null)
+        {
+            return provenanceRejection;
+        }
+
         return resolution.Kind switch
         {
             BuildDependencyResolutionKinds.ReadinessTokenAccepted =>
@@ -58,6 +64,34 @@ public sealed class BuildToTestHandoffEvaluator
                         ? [BuildToTestHandoffReasonCodes.BuildHandoffAmbiguous]
                         : resolution.ReasonCodes)
         };
+    }
+
+    private static BuildToTestHandoff? EvaluateLinkedBuildReuseProvenance(
+        BuildToTestHandoffRequest request,
+        BuildDependencyResolution resolution)
+    {
+        string? linkedBuildId = request.BuildLinkage.LinkedBuildId;
+        string? reuseExistingBuildId = request.BuildLinkage.BuildReuseDecision?.ExistingBuildId;
+
+        if (string.IsNullOrWhiteSpace(linkedBuildId) ||
+            string.IsNullOrWhiteSpace(reuseExistingBuildId) ||
+            string.Equals(linkedBuildId, reuseExistingBuildId, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        string kind = resolution.Kind switch
+        {
+            BuildDependencyResolutionKinds.LinkedBuildAccepted => BuildToTestHandoffKinds.LinkedBuild,
+            BuildDependencyResolutionKinds.ReadinessTokenAccepted => BuildToTestHandoffKinds.ReadinessToken,
+            _ => BuildToTestHandoffKinds.Rejected
+        };
+
+        return Reject(
+            kind,
+            request,
+            resolution,
+            [BuildToTestHandoffReasonCodes.BuildReuseExistingBuildMismatch]);
     }
 
     private static BuildToTestHandoff EvaluateReadinessToken(
