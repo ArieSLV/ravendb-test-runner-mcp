@@ -218,13 +218,7 @@ public sealed class BuildSchedulerExecutionEngineTests
             "builds/ws-1/2026-04-24/existing",
             NewBuildRequired: false);
         BuildPlan plan = CreatePlan(CreatePolicy(BuildPolicyModes.BuildIfMissingOrStale), reuseDecision);
-        BuildCommandPlan commandPlan = new(
-            plan.BuildPlanId,
-            "D:/workspace",
-            CreateEnvironment(),
-            [],
-            [],
-            ReproCommand: string.Empty);
+        BuildCommandPlan commandPlan = CreateEmptyCommandPlan(plan);
 
         BuildExecutionEngineResult result = await engine.RunAsync(new(
             "builds/ws-1/2026-04-24/001",
@@ -238,6 +232,120 @@ public sealed class BuildSchedulerExecutionEngineTests
         Assert.Equal(BuildExecutionPhases.FinalizingReuse, result.Execution.Phase);
         Assert.Equal(BuildResultStatuses.Reused, result.Result.Status);
         Assert.Equal(reuseDecision, result.Result.ReuseDecision);
+    }
+
+    [Fact]
+    public async Task ExecutionEngine_SkippedByPolicyDoesNotInvokeProcessRunner()
+    {
+        QueueBuildProcessRunner runner = new();
+        BuildExecutionEngine engine = new(runner);
+        BuildReuseDecision reuseDecision = new(
+            BuildReuseDecisionKinds.SkippedByPolicy,
+            [BuildReuseReasonCodes.ExpertSkipBuild, BuildPolicyReasonCodes.ExpertSkipBuildAccepted],
+            ExistingBuildId: null,
+            NewBuildRequired: false);
+        BuildPlan plan = CreatePlan(CreatePolicy(BuildPolicyModes.ExpertSkipBuild), reuseDecision);
+
+        BuildExecutionEngineResult result = await engine.RunAsync(new(
+            "builds/ws-1/2026-04-24/001",
+            plan,
+            CreateEmptyCommandPlan(plan),
+            BuildOwnershipModel.BuildOrchestrationOwner,
+            Now.UtcDateTime));
+
+        Assert.Empty(runner.Invocations);
+        Assert.Equal(BuildExecutionStates.Completed, result.Execution.State);
+        Assert.Equal(BuildExecutionPhases.FinalizingReuse, result.Execution.Phase);
+        Assert.Equal(BuildResultStatuses.Reused, result.Result.Status);
+        Assert.Contains(BuildReuseReasonCodes.ExpertSkipBuild, result.Result.Warnings);
+        Assert.Contains(BuildPolicyReasonCodes.ExpertSkipBuildAccepted, result.Result.Warnings);
+    }
+
+    [Fact]
+    public async Task ExecutionEngine_RejectsRejectedExistingNoBuildDecision()
+    {
+        QueueBuildProcessRunner runner = new();
+        BuildExecutionEngine engine = new(runner);
+        BuildReuseDecision reuseDecision = new(
+            BuildReuseDecisionKinds.RejectedExisting,
+            [BuildPolicyReasonCodes.ExistingReadinessRequired, BuildReuseReasonCodes.NoExistingReadiness],
+            ExistingBuildId: null,
+            NewBuildRequired: false);
+        BuildPlan plan = CreatePlan(CreatePolicy(BuildPolicyModes.RequireExistingReadyBuild), reuseDecision);
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() => engine.RunAsync(new(
+            "builds/ws-1/2026-04-24/001",
+            plan,
+            CreateEmptyCommandPlan(plan),
+            BuildOwnershipModel.BuildOrchestrationOwner,
+            Now.UtcDateTime)));
+
+        Assert.Contains(BuildPolicyReasonCodes.ExistingReadinessRequired, exception.Message, StringComparison.Ordinal);
+        Assert.Empty(runner.Invocations);
+    }
+
+    [Fact]
+    public async Task ExecutionEngine_RejectsEmptyCommandPlanWithoutReuseDecision()
+    {
+        QueueBuildProcessRunner runner = new();
+        BuildExecutionEngine engine = new(runner);
+        BuildPlan plan = CreatePlan(CreatePolicy(BuildPolicyModes.BuildIfMissingOrStale), reuseDecision: null);
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() => engine.RunAsync(new(
+            "builds/ws-1/2026-04-24/001",
+            plan,
+            CreateEmptyCommandPlan(plan),
+            BuildOwnershipModel.BuildOrchestrationOwner,
+            Now.UtcDateTime)));
+
+        Assert.Contains(BuildPolicyReasonCodes.BuildSubsystemDecisionRequired, exception.Message, StringComparison.Ordinal);
+        Assert.Empty(runner.Invocations);
+    }
+
+    [Fact]
+    public async Task ExecutionEngine_RejectsEmptyCommandPlanWhenNewBuildIsRequired()
+    {
+        QueueBuildProcessRunner runner = new();
+        BuildExecutionEngine engine = new(runner);
+        BuildReuseDecision reuseDecision = new(
+            BuildReuseDecisionKinds.RebuiltMissing,
+            [BuildReuseReasonCodes.NoExistingReadiness],
+            ExistingBuildId: null,
+            NewBuildRequired: true);
+        BuildPlan plan = CreatePlan(CreatePolicy(BuildPolicyModes.BuildIfMissingOrStale), reuseDecision);
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() => engine.RunAsync(new(
+            "builds/ws-1/2026-04-24/001",
+            plan,
+            CreateEmptyCommandPlan(plan),
+            BuildOwnershipModel.BuildOrchestrationOwner,
+            Now.UtcDateTime)));
+
+        Assert.Contains(BuildPolicyReasonCodes.BuildSubsystemDecisionRequired, exception.Message, StringComparison.Ordinal);
+        Assert.Empty(runner.Invocations);
+    }
+
+    [Fact]
+    public async Task ExecutionEngine_RejectsCommandStepsWithAcceptedReuseDecision()
+    {
+        QueueBuildProcessRunner runner = new();
+        BuildExecutionEngine engine = new(runner);
+        BuildReuseDecision reuseDecision = new(
+            BuildReuseDecisionKinds.ReusedExisting,
+            [BuildReuseReasonCodes.CurrentFingerprintMatches],
+            "builds/ws-1/2026-04-24/existing",
+            NewBuildRequired: false);
+        BuildPlan plan = CreatePlan(CreatePolicy(BuildPolicyModes.BuildIfMissingOrStale), reuseDecision);
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() => engine.RunAsync(new(
+            "builds/ws-1/2026-04-24/001",
+            plan,
+            CreateSingleStepCommandPlan(),
+            BuildOwnershipModel.BuildOrchestrationOwner,
+            Now.UtcDateTime)));
+
+        Assert.Contains(BuildPolicyReasonCodes.BuildSubsystemDecisionRequired, exception.Message, StringComparison.Ordinal);
+        Assert.Empty(runner.Invocations);
     }
 
     private static BuildCommandPlan CreateSingleStepCommandPlan()
@@ -259,6 +367,15 @@ public sealed class BuildSchedulerExecutionEngineTests
             [],
             "dotnet build RavenDB.sln --configuration Release --no-restore");
     }
+
+    private static BuildCommandPlan CreateEmptyCommandPlan(BuildPlan plan) =>
+        new(
+            plan.BuildPlanId,
+            "D:/workspace",
+            CreateEnvironment(),
+            [],
+            [],
+            ReproCommand: string.Empty);
 
     private static BuildChildProcessEnvironment CreateEnvironment() =>
         new(

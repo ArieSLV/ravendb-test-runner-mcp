@@ -390,10 +390,13 @@ public sealed class BuildExecutionEngine
             throw new InvalidOperationException(BuildPolicyReasonCodes.HiddenBuildForbidden);
         }
 
+        ValidateCommandPlanConsistency(request.Plan, request.CommandPlan);
+
         DateTime startedAtUtc = NormalizeUtc(request.StartedAtUtc);
         if (request.CommandPlan.Steps.Count == 0 &&
-            request.Plan.ReuseDecision?.NewBuildRequired is false)
+            IsAcceptedNoMaterialBuildDecision(request.Plan.ReuseDecision))
         {
+            BuildReuseDecision reuseDecision = request.Plan.ReuseDecision!;
             BuildExecution reusedExecution = CreateExecution(
                 request,
                 BuildExecutionStates.Completed,
@@ -407,8 +410,8 @@ public sealed class BuildExecutionEngine
                 BuildResultStatuses.Reused,
                 failureClassification: null,
                 reproCommand: request.CommandPlan.ReproCommand,
-                request.Plan.ReuseDecision,
-                warnings: request.Plan.ReuseDecision.ReasonCodes);
+                reuseDecision,
+                warnings: reuseDecision.ReasonCodes);
 
             return new(reusedExecution, reusedResult, []);
         }
@@ -479,6 +482,56 @@ public sealed class BuildExecutionEngine
             warnings: []);
 
         return new(completedExecution, result, stepResults);
+    }
+
+    private static void ValidateCommandPlanConsistency(BuildPlan plan, BuildCommandPlan commandPlan)
+    {
+        BuildReuseDecision? reuseDecision = plan.ReuseDecision;
+        bool hasCommandSteps = commandPlan.Steps.Count > 0;
+
+        if (!hasCommandSteps)
+        {
+            if (IsAcceptedNoMaterialBuildDecision(reuseDecision))
+            {
+                return;
+            }
+
+            if (reuseDecision?.Decision == BuildReuseDecisionKinds.RejectedExisting)
+            {
+                throw new InvalidOperationException(CreateRejectedExistingMessage(reuseDecision));
+            }
+
+            throw new InvalidOperationException(
+                BuildPolicyReasonCodes.BuildSubsystemDecisionRequired + ": empty_command_plan_requires_accepted_reuse_decision");
+        }
+
+        if (reuseDecision is null)
+        {
+            return;
+        }
+
+        if (!reuseDecision.NewBuildRequired)
+        {
+            if (reuseDecision.Decision == BuildReuseDecisionKinds.RejectedExisting)
+            {
+                throw new InvalidOperationException(CreateRejectedExistingMessage(reuseDecision));
+            }
+
+            throw new InvalidOperationException(
+                BuildPolicyReasonCodes.BuildSubsystemDecisionRequired + ": command_steps_conflict_with_no_material_build_decision");
+        }
+    }
+
+    private static bool IsAcceptedNoMaterialBuildDecision(BuildReuseDecision? reuseDecision) =>
+        reuseDecision is not null &&
+        !reuseDecision.NewBuildRequired &&
+        reuseDecision.Decision is BuildReuseDecisionKinds.ReusedExisting or BuildReuseDecisionKinds.SkippedByPolicy;
+
+    private static string CreateRejectedExistingMessage(BuildReuseDecision reuseDecision)
+    {
+        string reasonCode = reuseDecision.ReasonCodes.FirstOrDefault(code => !string.IsNullOrWhiteSpace(code)) ??
+            BuildPolicyReasonCodes.BuildSubsystemDecisionRequired;
+        return reasonCode + ": rejected_existing_build_reuse_decision_cannot_be_executed";
     }
 
     private static BuildExecution CreateExecution(
